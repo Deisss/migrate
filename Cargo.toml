@@ -1,0 +1,36 @@
+[package]
+name = "migrate"
+version = "0.1.0"
+authors = ["Deisss <deisss@free.fr>"]
+edition = "2018"
+license = "MIT"
+keywords = ["database", "migration", "migrate", "mysql", "postgres", "postgresql", "sqlite"]
+categories = ["command-line-utilities", "development-tools"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+config = "0.10.1"
+clap = "2.33.0"
+glob = "0.3.0"
+regex = "1"
+native-tls = "0.2.4"
+postgres-native-tls = "0.3.0"
+postgres = "0.17.2"
+rusqlite = { version = "0.21.0", features = ["bundled"] }
+mysql = "18.1.0"
+slog = "2.5.2"
+slog-async = "2.5.0"
+slog-term = "2.5.0"
+slog-scope = "4.3.0"
+chrono = "0.4.11"
+md5 = "0.7.0"
+console = "0.10.0"
+
+[profile.release]
+opt-level = 'z'
+lto = true
+# codegen-units = 1
+
+[[bin]]
+name = "migrate"
