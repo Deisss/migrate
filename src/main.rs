@@ -264,12 +264,14 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
     }
 
     // Url override everything
-    if configuration.url.starts_with("mysql") == true {
-        configuration.engine = EngineName::MYSQL;
-    } else if configuration.url.starts_with("postgres") == true || configuration.url.contains("host=") == true {
-        configuration.engine = EngineName::POSTGRESQL;
-    } else {
-        configuration.engine = EngineName::SQLITE;
+    if configuration.url.len() > 0 {
+        if configuration.url.starts_with("mysql") == true {
+            configuration.engine = EngineName::MYSQL;
+        } else if configuration.url.starts_with("postgres") == true || configuration.url.contains("host=") == true {
+            configuration.engine = EngineName::POSTGRESQL;
+        } else {
+            configuration.engine = EngineName::SQLITE;
+        }
     }
 
     configuration
