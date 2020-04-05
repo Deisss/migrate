@@ -20,7 +20,7 @@ fn print_error_postgres(content: &str, error: postgres::error::Error) {
 
     if str_error.starts_with("\"") && str_error.ends_with("\"") {
         let len = str_error.len() - 1;
-        str_error = (&str_error[1..len]).to_string();
+        str_error = (&str_error[1..len]).to_owned();
     }
 
     // Move from postgres Error to DBError
