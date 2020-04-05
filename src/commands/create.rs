@@ -383,10 +383,10 @@ fn process_create(folder: &str, configuration: &Configuration) {
     let t = get_current_time();
 
     // Now is YYYYMMDDhhmmss
-    let now = &[&t.year as &str, &t.month as &str, &t.day as &str, &t.hour as &str, &t.minute as &str, &t.second as &str].join("");
+    let now = format!("{}{}{}{}{}{}", &t.year, &t.month, &t.day, &t.hour, &t.minute, &t.second);
 
     if configuration.create_type == CreateType::FILE {
-        let filename = &[now, "_", &configuration.create_name, ".sql"].join("");
+        let filename = &[&now, "_", &configuration.create_name, ".sql"].join("");
         let full_filename = Path::new(folder).join(filename);
         if configuration.debug == true {
             debug_configuration(configuration);
@@ -397,7 +397,7 @@ fn process_create(folder: &str, configuration: &Configuration) {
         }
 
     } else if configuration.create_type == CreateType::FOLDER {
-        let full_folder = Path::new(folder).join(&[now, "_", &configuration.create_name].join(""));
+        let full_folder = Path::new(folder).join(&[&now, "_", &configuration.create_name].join(""));
         let full_folder_str = full_folder.clone().into_os_string().into_string();
         if full_folder_str.is_err() {
             crit!("Could not create migration folder: {}", full_folder_str.clone().err().unwrap().into_string().unwrap());
@@ -418,8 +418,8 @@ fn process_create(folder: &str, configuration: &Configuration) {
         }
 
     } else if configuration.create_type == CreateType::SPLITFILES {
-        let full_filename_up = Path::new(folder).join(&[now, "_", &configuration.create_name, ".up.sql"].join(""));
-        let full_filename_down = Path::new(folder).join(&[now, "_", &configuration.create_name, ".down.sql"].join(""));
+        let full_filename_up = Path::new(folder).join(&[&now, "_", &configuration.create_name, ".up.sql"].join(""));
+        let full_filename_down = Path::new(folder).join(&[&now, "_", &configuration.create_name, ".down.sql"].join(""));
         if configuration.debug == true {
             debug_configuration(configuration);
             debug!("Files to be created:");
