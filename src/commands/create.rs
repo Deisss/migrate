@@ -43,24 +43,6 @@ fn ask_for_new_folder(configuration: &Configuration, path: &str) -> bool {
     false
 }
 
-/// Transform a number into string with a given padding at the beginning.
-///
-/// # Arguments
-///
-/// * `t` - The value to convert.
-/// * `size` - The length of the string at the end.
-fn number_to_string(t: u32, size: usize) -> String {
-    let mut s = String::with_capacity(size);
-    let c = t.to_string();
-
-    while s.len() + c.len() < size {
-        s.push('0');
-    }
-    s.push_str(&c);
-
-    s
-}
-
 /// Get the current time.
 ///
 /// # Arguments
@@ -69,12 +51,12 @@ fn number_to_string(t: u32, size: usize) -> String {
 fn get_current_time() -> CurrentTime {
     let local: DateTime<Local> = Local::now();
     CurrentTime {
-        year: number_to_string(local.year() as u32, 4),
-        month: number_to_string(local.month(), 2),
-        day: number_to_string(local.day(), 2),
-        hour: number_to_string(local.hour(), 2),
-        minute: number_to_string(local.minute(), 2),
-        second: number_to_string(local.second(), 2)
+        year:  format!("{:04}", local.year()),
+        month: format!("{:02}", local.month()),
+        day: format!("{:02}", local.day()),
+        hour: format!("{:02}", local.hour()),
+        minute: format!("{:02}", local.minute()),
+        second: format!("{:02}", local.second())
     }
 }
 
