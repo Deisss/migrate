@@ -51,22 +51,18 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
         let now = Instant::now();
         let file_name = get_file_path_without_migration_path(&configuration.path, &file.origin.display().to_string());
         info!("{} -> migrating", &file_name);
-        let mut error: bool = false;
-
-        match get_sql(&file, 1) {
+        let error: bool = match get_sql(&file, 1) {
             Ok(sql) => {
                 match db.migrate(&file.origin, &file.number.to_string(), &sql) {
-                    Err(_e) => {
-                        error = true;
-                    },
-                    _ => {}
+                    Err(_e) => true,
+                    _ => false
                 }
             },
             Err(e) => {
-                error = true;
                 warn!("{} failed to read: {}", &file_name, e);
+                true
             }
-        }
+        };
 
         let elapsed = now.elapsed().as_millis();
         if error {

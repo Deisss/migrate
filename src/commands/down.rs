@@ -52,22 +52,19 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
         let now = Instant::now();
         let file_name = get_file_path_without_migration_path(&configuration.path, &file.origin.display().to_string());
         info!("{} -> reverting", &file_name);
-        let mut error: bool = false;
 
-        match get_sql(&file, 0) {
+        let error: bool = match get_sql(&file, 0) {
             Ok(sql) => {
                 match db.rollback(&file.origin, &file.number.to_string(), &sql) {
-                    Err(_e) => {
-                        error = true;
-                    },
-                    _ => {}
+                    Err(_e) => true,
+                    _ => false
                 }
             },
             Err(e) => {
-                error = true;
                 warn!("{} failed to read: {}", &file_name, e);
+                true
             }
-        }
+        };
 
         let elapsed = now.elapsed().as_millis();
         if error {
