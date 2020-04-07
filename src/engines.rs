@@ -48,7 +48,7 @@ fn postgresql_url(configuration: &Configuration) -> String {
     url.push_str(&configuration.username);
     url.push('\'');
 
-    if configuration.port != 6379 {
+    if configuration.port != 5432 {
         url.push_str(" port=");
         url.push_str(&configuration.port.to_string());
     }
