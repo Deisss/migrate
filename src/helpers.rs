@@ -126,7 +126,7 @@ pub fn limit_per_date(migration_number: &str, days: u32) -> bool {
     e > n
 }
 
-/// Fit a number into the given size allowed (14 chars).
+/// Fit a number into the given size allowed (16 chars).
 ///
 /// # Arguments
 ///
