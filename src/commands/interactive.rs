@@ -157,104 +157,15 @@ pub fn merge_migrations_and_files(migrations: &Vec<(String, String, String)>, fi
 /// * `root` - The folder where migrations are.
 /// * `migrations` - The elements to show.
 /// * `selected` - The selected position.
-fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, selected: usize) -> std::io::Result<()> {
+fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, selected: usize) -> std::io::Result<Vec<usize>> {
     let installed = Style::new().green();
-    let notinstalled = Style::new().red();
+    let not_installed = Style::new().red();
     let cyan = Style::new().cyan();
     let yellow = Style::new().yellow();
     let inactive = Style::new().dim();
-
-    for index in 0..migrations.len() {
-        if let Some(migration) = migrations.get(index) {
-            let mut content = String::new();
-
-            if selected == index {
-                content.push_str(&format!("{} ", cyan.apply_to(">")));
-            } else {
-                content.push_str("  ");
-            }
-    
-            if migration.current_type == InteractionType::UP {
-                let m_hash = migration.migration_hash.as_ref();
-                let f_hash = migration.file_up_hash.as_ref();
-                if m_hash.is_some() && f_hash.is_some() && Some(m_hash) == Some(f_hash) {
-                    content.push_str(&format!("    {}    ", installed.apply_to("yes")));
-                } else {
-                    content.push_str(&format!("  {}  ", yellow.apply_to("changed")));
-                }
-                
-            } else {
-                content.push_str(&format!("    {}     ", notinstalled.apply_to("no")));
-            }
-    
-            match migration.new_type {
-                InteractionType::NONE => content.push_str("|           |"),
-                InteractionType::UP =>   content.push_str(&format!("|  {}  |", cyan.apply_to("install"))),
-                InteractionType::DOWN => content.push_str(&format!("| {} |", cyan.apply_to("uninstall"))),
-                InteractionType::REDO => content.push_str(&format!("| {} |", cyan.apply_to("reinstall"))),
-            }
-    
-            content.push_str(" ");
-            if selected == index {
-                content.push_str(&limit_number(&migration.number));
-            } else {
-                content.push_str(&inactive.apply_to(&limit_number(&migration.number)).to_string());
-            }
-            content.push_str(" | ");
-    
-            if migration.file_up.is_some() {
-                let f = migration.file_up.as_ref().unwrap();
-                let file_name = get_file_path_without_migration_path(root, &f.origin.display().to_string());
-                if selected == index {
-                    content.push_str(&format!("{} ({})", f.name, file_name));
-                } else {
-                    content.push_str(&format!("{} {}{}{}", inactive.apply_to(&f.name),
-                        inactive.apply_to("("), inactive.apply_to(file_name),
-                        inactive.apply_to(")")
-                    ));
-                }
-            } else if migration.migration_origin.is_some() {
-                if selected == index {
-                    content.push_str(&format!("{} (was: {})", yellow.apply_to("missing file"), &migration.migration_origin.as_ref().unwrap()));
-                } else {
-                    content.push_str(&format!("{} {}{} {}{}", yellow.apply_to("missing file"),
-                    inactive.apply_to("("), inactive.apply_to("was:"), inactive.apply_to(migration.migration_origin.as_ref().unwrap()),
-                        inactive.apply_to(")")
-                    ));
-                }
-            }
-            term.write_line(&content.replace("\"", ""))?;
-        }
-    }
-
-    if selected == migrations.len() {
-        term.write_line(&format!("{} Apply", cyan.apply_to(">")))?;
-    } else {
-        term.write_line(&format!("  {}", inactive.apply_to("Apply")))?;
-    }
-
-    if selected == migrations.len() + 1 {
-        term.write_line(&format!("{} Exit", cyan.apply_to(">")))?;
-    } else {
-        term.write_line(&format!("  {}", inactive.apply_to("Exit")))?;
-    }
-
-    Ok(())
-}
-
-/// Generate the interactive menu.
-///
-/// # Arguments
-///
-/// * `root` - The root of migration folder.
-/// * `migrations` - The files to show.
-fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>) -> bool {
-    let term = Term::stdout();
-    let mut position: usize = 0;
-    let mut rerender = true;
+    let mut results: Vec<usize> = Vec::with_capacity(migrations.len());
 
     // need to specify number of lines here
-    const NLINES: usize = 3;
     let r = term.write_line("");
     if r.is_err() {
         crit!("Terminal error: {:?}", r.err());
@@ -267,23 +178,158 @@ fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>)
     if r.is_err() {
         crit!("Terminal error: {:?}", r.err());
     }
+    results.push(0);
+    results.push(50);
+    results.push(62);
+
+    for index in 0..migrations.len() {
+        if let Some(migration) = migrations.get(index) {
+            let mut content = String::new();
+            // We have to count not linked to the string as the string
+            // includes a lots of unseen characters (for color)
+            let mut size: usize = 0;
+
+            if selected == index {
+                content.push_str(&format!("{} ", cyan.apply_to(">")));
+            } else {
+                content.push_str("  ");
+            }
+            size += 2;
+    
+            if migration.current_type == InteractionType::UP {
+                let m_hash = migration.migration_hash.as_ref();
+                let f_hash = migration.file_up_hash.as_ref();
+                if m_hash.is_some() && f_hash.is_some() && Some(m_hash) == Some(f_hash) {
+                    content.push_str(&format!("    {}    ", installed.apply_to("yes")));
+                } else {
+                    content.push_str(&format!("  {}  ", yellow.apply_to("changed")));
+                }
+                
+            } else {
+                content.push_str(&format!("    {}     ", not_installed.apply_to("no")));
+            }
+            size += 11;
+    
+            match migration.new_type {
+                InteractionType::NONE => content.push_str("|           |"),
+                InteractionType::UP =>   content.push_str(&format!("|  {}  |", cyan.apply_to("install"))),
+                InteractionType::DOWN => content.push_str(&format!("| {} |", cyan.apply_to("uninstall"))),
+                InteractionType::REDO => content.push_str(&format!("| {} |", cyan.apply_to("reinstall"))),
+            }
+            size += 13;
+    
+            content.push_str(" ");
+            if selected == index {
+                content.push_str(&limit_number(&migration.number));
+            } else {
+                content.push_str(&inactive.apply_to(&limit_number(&migration.number)).to_string());
+            }
+            content.push_str(" | ");
+            // The number has a fixed size of 16 characters + 4 above and below
+            size += 20;
+    
+            if migration.file_up.is_some() {
+                let f = migration.file_up.as_ref().unwrap();
+                let file_name = get_file_path_without_migration_path(root, &f.origin.display().to_string());
+                if selected == index {
+                    content.push_str(&format!("{} ({})", &f.name.to_owned(), file_name.to_owned()));
+                } else {
+                    content.push_str(&format!("{} {}{}{}", inactive.apply_to(&f.name.to_owned()),
+                        inactive.apply_to("("), inactive.apply_to(file_name.to_owned()),
+                        inactive.apply_to(")")
+                    ));
+                }
+                size += 3 + f.name.len() + file_name.len();
+            } else if migration.migration_origin.is_some() {
+                if selected == index {
+                    content.push_str(&format!("{} (was: {})", yellow.apply_to("missing file"), &migration.migration_origin.as_ref().unwrap()));
+                } else {
+                    content.push_str(&format!("{} {}{} {}{}", yellow.apply_to("missing file"),
+                    inactive.apply_to("("), inactive.apply_to("was:"), inactive.apply_to(migration.migration_origin.as_ref().unwrap()),
+                        inactive.apply_to(")")
+                    ));
+                }
+                size += 20 + migration.migration_origin.as_ref().unwrap().len();
+            }
+            // content = content.replace("\"", "");
+            term.write_line(&content.clone())?;
+            results.push(size);
+        }
+    }
+
+    if selected == migrations.len() {
+        let s: String = format!("{} Apply", cyan.apply_to(">"));
+        term.write_line(&s.clone())?;
+    } else {
+        let s: String = format!("  {}", inactive.apply_to("Apply"));
+        term.write_line(&s.clone())?;
+    }
+    results.push(7);
+
+    if selected == migrations.len() + 1 {
+        let s: String = format!("{} Exit", cyan.apply_to(">"));
+        term.write_line(&s.clone())?;
+    } else {
+        let s: String = format!("  {}", inactive.apply_to("Exit"));
+        term.write_line(&s.clone())?;
+    }
+    results.push(6);
+
+    Ok(results)
+}
+
+/// Clear the menu
+///
+/// # Arguments
+///
+/// * `term` - The terminal object.
+/// * `sizes` - List of written lines so far.
+fn clear_menu(term: &Term, sizes: &mut Vec<usize>) -> std::io::Result<()> {
+    // First we need to get the size of the terminal
+    let (_height, width) = term.size();
+    let width: usize = width as usize;
+    let mut nb_lines_to_clear: usize = 0;
+    for original_size in sizes.iter() {
+        let mut line_size = *original_size;
+        while line_size > width && line_size > 0 {
+            line_size -= width;
+            nb_lines_to_clear += 1;
+        }
+        nb_lines_to_clear += 1;
+    }
+    term.clear_last_lines(nb_lines_to_clear)
+}
+
+/// Generate the interactive menu.
+///
+/// # Arguments
+///
+/// * `root` - The root of migration folder.
+/// * `migrations` - The files to show.
+fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>) -> bool {
+    let term = Term::stdout();
+    let mut position: usize = 0;
+    let mut rerender = false;
+
 
     let r = print_menu(&term, root, &migrations, position);
     if r.is_err() {
-        crit!("Terminal error: {:?}", r.err());
+        crit!("Terminal error: {:?}", r.as_ref().err());
     }
+    let mut rendered_sizes: Vec<usize> = r.unwrap();
 
     loop {
         if rerender == true {
             rerender = false;
-            let r = term.clear_last_lines(migrations.len() + 2);
+            let r = clear_menu(&term, &mut rendered_sizes);
             if r.is_err() {
                 crit!("Terminal error: {:?}", r.err());
             }
             let r = print_menu(&term, root, &migrations, position);
             if r.is_err() {
-                crit!("Terminal error: {:?}", r.err());
+                crit!("Terminal error: {:?}", r.as_ref().err());
             }
+            rendered_sizes = r.unwrap();
         }
         thread::sleep(Duration::from_millis(10));
         let res = term.read_key().unwrap();
@@ -311,14 +357,14 @@ fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>)
                     }
                 } else if position == migrations.len() {
                     // Return true when we want to exit with apply
-                    let r = term.clear_last_lines(migrations.len() + 2 + NLINES);
+                    let r = clear_menu(&term, &mut rendered_sizes);
                     if r.is_err() {
                         crit!("Terminal error: {:?}", r.err());
                     }
                     return true;
                 } else if position == migrations.len() + 1 {
                     // Return false when we want to just quit
-                    let r = term.clear_last_lines(migrations.len() + 2 + NLINES);
+                    let r = clear_menu(&term, &mut rendered_sizes);
                     if r.is_err() {
                         crit!("Terminal error: {:?}", r.err());
                     }
