@@ -1,6 +1,6 @@
-use native_tls::TlsConnector;
-use postgres::{Client, Config};
-use postgres_native_tls::{MakeTlsConnector};
+//use native_tls::TlsConnector;
+use postgres::{Client, Config, NoTls};
+//use postgres_native_tls::{MakeTlsConnector};
 use std::str::FromStr;
 use super::{SqlEngine, EngineError};
 use std::error::Error;
@@ -92,6 +92,7 @@ impl Postgresql {
             return Err(Box::new(err));
         }
         let config = config.unwrap();
+        /*
         let connector = TlsConnector::new();
         if connector.is_err() {
             let err = connector.err().unwrap();
@@ -100,6 +101,8 @@ impl Postgresql {
         }
         let connector = MakeTlsConnector::new(connector.unwrap());
         let connection = config.connect(connector);
+        */
+        let connection = config.connect(NoTls);
         if connection.is_err() {
             let err = connection.err().unwrap();
             if err.to_string().starts_with("error parsing response from server") {
