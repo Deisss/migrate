@@ -1,12 +1,12 @@
-//use native_tls::TlsConnector;
 use postgres::{Client, Config, NoTls};
-//use postgres_native_tls::{MakeTlsConnector};
 use std::str::FromStr;
 use super::{SqlEngine, EngineError};
 use std::error::Error;
 use crate::helpers::get_relevant_line;
 use std::path::PathBuf;
 use md5;
+use native_tls::TlsConnector;
+use postgres_native_tls::MakeTlsConnector;
 
 /// Print on console the PostgreSQL error.
 ///
@@ -77,6 +77,7 @@ fn print_error_postgres(content: &str, error: postgres::error::Error) {
     crit!("");
 }
 
+
 pub struct Postgresql {
     client: Client,
     migration_table_name: String,
@@ -92,29 +93,32 @@ impl Postgresql {
             return Err(Box::new(err));
         }
         let config = config.unwrap();
-        /*
-        let connector = TlsConnector::new();
-        if connector.is_err() {
-            let err = connector.err().unwrap();
-            crit!("Could not get TLS for PostgreSQL: {}", err.to_string());
-            return Err(Box::new(err));
-        }
-        let connector = MakeTlsConnector::new(connector.unwrap());
-        let connection = config.connect(connector);
-        */
-        let connection = config.connect(NoTls);
+
+        // We start by trying to connect with NoTls activated
+        // If it fails we try then to connect with TLS...
+        let mut connection = config.connect(NoTls);
         if connection.is_err() {
-            let err = connection.err().unwrap();
-            if err.to_string().starts_with("error parsing response from server") {
-                crit!("Could not connect to PostgreSQL: check credentials");
-            } else {
-                crit!("Could not connect to PostgreSQL: {}", err.to_string());
+            let connector = TlsConnector::new();
+            if connector.is_err() {
+                let err = connector.err().unwrap();
+                crit!("Could not get TLS for PostgreSQL: {}", err.to_string());
+                return Err(Box::new(err));
             }
-            return Err(Box::new(err));
+            let connector = MakeTlsConnector::new(connector.unwrap());
+            connection = config.connect(connector);
+            if connection.is_err() {
+                let err = connection.err().unwrap();
+                if err.to_string().starts_with("error parsing response from server") {
+                    crit!("Could not connect to PostgreSQL: check credentials");
+                } else {
+                    crit!("Could not connect to PostgreSQL: {}", err.to_string());
+                }
+                return Err(Box::new(err));
+            }
         }
-        let connection = connection.unwrap();
+
         Ok(Box::new(Postgresql {
-            client: connection,
+            client: connection.unwrap(),
             migration_table_name: migration_table_name.to_owned(),
         }))
     }

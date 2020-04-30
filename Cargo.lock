@@ -850,7 +850,9 @@ dependencies = [
  "glob",
  "md5",
  "mysql",
+ "native-tls",
  "postgres",
+ "postgres-native-tls",
  "regex",
  "rusqlite",
  "slog",
@@ -1187,6 +1189,20 @@ dependencies = [
  "log",
  "tokio",
  "tokio-postgres",
+]
+
+[[package]]
+name = "postgres-native-tls"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "616bfdeeb542b2b0d444391dbcdd91e9a800bc7f35950c9741fe24b07e958900"
+dependencies = [
+ "bytes",
+ "futures",
+ "native-tls",
+ "tokio",
+ "tokio-postgres",
+ "tokio-tls",
 ]
 
 [[package]]
@@ -1744,6 +1760,16 @@ dependencies = [
  "postgres-types",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "tokio-tls"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bde02a3a5291395f59b06ec6945a3077602fac2b07eeeaf0dee2122f3619828"
+dependencies = [
+ "native-tls",
+ "tokio",
 ]
 
 [[package]]
