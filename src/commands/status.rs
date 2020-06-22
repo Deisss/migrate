@@ -82,7 +82,7 @@ fn process_status_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
         _ => {}
     };
 
-    let existing = db.get_migrations_with_hashes();
+    let existing = db.get_migrations_with_hashes(&configuration.migration_type);
     if existing.is_err() {
         crit!("Error getting migrations: {:?}", existing.as_ref().err());
     }

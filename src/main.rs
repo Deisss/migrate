@@ -78,6 +78,7 @@ pub struct Configuration {
     path: String,
     interactive: bool,
     continue_on_error: bool,
+    migration_type: String,
     version: String,
     step: u32,
     debug: bool,
@@ -171,6 +172,10 @@ fn read_config_file(args: &ArgMatches) -> Configuration {
         Ok(s) => s,
         Err(_) => String::from("./migrations")
     };
+    configuration.migration_type = match settings.get::<String>("migration_type") {
+        Ok(s) => s,
+        Err(_) => String::from("migration")
+    };
 
     configuration
 }
@@ -198,6 +203,7 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
         interactive: args.is_present("interactive"),
         continue_on_error: args.is_present("continueonerror"),
         version: args.value_of("version").unwrap_or("").to_string(),
+        migration_type: file_configuration.migration_type,
         step: 0,
         debug: args.is_present("debug"),
         interactive_days: 0,
@@ -255,7 +261,7 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
     // Specific to create command
     if cmd == "create" {
         configuration.command = CommandName::CREATE;
-        let create_type = args.value_of("type").unwrap_or("folder");
+        let create_type = args.value_of("folder_type").unwrap_or("folder");
         match create_type {
             "file" | "files" => configuration.create_type = CreateType::FILE,
             "split" | "split-file" | "split-files" => configuration.create_type = CreateType::SPLITFILES,
@@ -298,11 +304,20 @@ fn main() {
     // Compute the whole time to parse & do everything
     let whole_application_time = Instant::now();
 
-    // Starting logger
-    let decorator = slog_term::TermDecorator::new().build();
-    let drain = slog_term::CompactFormat::new(decorator).use_custom_timestamp(timestamp_utc).build().fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-    let guard = slog_scope::set_global_logger(slog::Logger::root(slog::Logger::root(drain, o!()), o![]));
+    // Logger
+    // Logging to stdout if below or equal to warning level
+    let decorator_stdout = slog_term::TermDecorator::new().stdout().build();
+    let drain_stdout = slog_term::CompactFormat::new(decorator_stdout).use_custom_timestamp(timestamp_utc).build().fuse();
+    let drain_stdout = drain_stdout.filter(|r| r.level().as_usize() >= slog::Level::Warning.as_usize()).fuse();
+    let drain_stdout = slog_async::Async::new(drain_stdout).build().fuse();
+    // Logging to stderr if above warning level or below
+    let decorator_stderr = slog_term::TermDecorator::new().stderr().build();
+    let drain_stderr = slog_term::CompactFormat::new(decorator_stderr).use_custom_timestamp(timestamp_utc).build().fuse();
+    let drain_stderr = drain_stderr.filter(|r| r.level().as_usize() < slog::Level::Warning.as_usize()).fuse();
+    let drain_stderr = slog_async::Async::new(drain_stderr).build().fuse();
+    // Building logger
+    let drain_both = slog::Duplicate(drain_stdout, drain_stderr);
+    let guard = slog_scope::set_global_logger(slog::Logger::root(drain_both.fuse(), o!()));
 
     // Command line arguments & parsing
     let base = SubCommand::with_name("base")
@@ -368,6 +383,12 @@ fn main() {
             .value_name("PATH")
             .help("Folder to locate migration scripts [default: ./migrations]")
             .takes_value(true))
+        .arg(Arg::with_name("migration_type")
+            .long("migration_type")
+            .short("mt")
+            .value_name("MIGRATION_TYPE")
+            .help("Set the type of migration [default: migration]")
+            .takes_value(true))
         .arg(Arg::with_name("debug")
             .long("debug")
             .help("If set, this parameter will only print the configuration and do nothing")
@@ -377,9 +398,9 @@ fn main() {
     let mut create = base.clone();
     create = create.name("create")
         .about("Create a new migration file")
-        .arg(Arg::with_name("type")
-            .long("type")
-            .value_name("TYPE")
+        .arg(Arg::with_name("folder_type")
+            .long("folder_type")
+            .value_name("FOLDER_TYPE")
             .help("Create a folder containing up and down files [default: folder]")
             .takes_value(true))
         .arg(Arg::with_name("name")

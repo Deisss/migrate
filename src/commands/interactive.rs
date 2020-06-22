@@ -201,8 +201,10 @@ fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, s
                 let f_hash = migration.file_up_hash.as_ref();
                 if m_hash.is_some() && f_hash.is_some() && Some(m_hash) == Some(f_hash) {
                     content.push_str(&format!("    {}    ", installed.apply_to("yes")));
-                } else {
+                } else if f_hash.is_some() {
                     content.push_str(&format!("  {}  ", yellow.apply_to("changed")));
+                } else {
+                    content.push_str(&format!("  {}  ", yellow.apply_to("missing")));
                 }
                 
             } else {
@@ -461,7 +463,7 @@ fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>)
         _ => {}
     };
 
-    let existing = db.get_migrations_with_hashes();
+    let existing = db.get_migrations_with_hashes(&configuration.migration_type);
     if existing.is_err() {
         crit!("Error getting migrations: {:?}", existing.as_ref().err());
     }

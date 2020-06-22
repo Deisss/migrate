@@ -53,7 +53,7 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
         info!("{} -> migrating", &file_name);
         let error: bool = match get_sql(&file, 1) {
             Ok(sql) => {
-                match db.migrate(&file.origin, &file.number.to_string(), &sql) {
+                match db.migrate(&file.origin, &file.number.to_string(), &configuration.migration_type, &sql) {
                     Err(_e) => true,
                     _ => false
                 }

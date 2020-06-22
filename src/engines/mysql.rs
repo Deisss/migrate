@@ -37,7 +37,7 @@ impl SqlEngine for Mysql {
     fn create_migration_table(&mut self) -> Result<u64, Box<dyn Error>> {
         let mut create_table: String = String::from("CREATE TABLE IF NOT EXISTS `");
         create_table.push_str(&self.migration_table_name);
-        create_table.push_str("` (`migration` VARCHAR(20) PRIMARY KEY, `hash` VARCHAR(32), `file_name` TEXT, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+        create_table.push_str("` (`migration` VARCHAR(20) PRIMARY KEY, `hash` VARCHAR(32), `type` VARCHAR(255), `file_name` TEXT, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
         match self.client.query_drop(&create_table as &str) {
             Ok(_) => Ok(0),
             Err(e) => Err(Box::new(e))
@@ -62,12 +62,12 @@ impl SqlEngine for Mysql {
         Ok(data.unwrap())
     }
 
-    fn get_migrations_with_hashes(&mut self) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
+    fn get_migrations_with_hashes(&mut self, migration_type: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
         let mut get_migration = String::from("SELECT `migration`, `hash`, `file_name` FROM `");
         get_migration.push_str(&self.migration_table_name);
-        get_migration.push_str("` ORDER BY `migration` desc");
+        get_migration.push_str("` WHERE `type` = ? ORDER BY `migration` desc");
 
-        let data = self.client.query_map(&get_migration, |(migration, hash, file_name): (String, String, String)| {
+        let data = self.client.exec_map(&get_migration, (&migration_type,), |(migration, hash, file_name): (String, String, String)| {
             (migration, hash, file_name)
         });
 
@@ -79,11 +79,11 @@ impl SqlEngine for Mysql {
         Ok(data.unwrap())
     }
 
-    fn migrate(&mut self, file: &PathBuf, version: &str, migration: &str) -> Result<(), Box<dyn Error>> {
+    fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str) -> Result<(), Box<dyn Error>> {
         // Insert statement
         let mut insert = String::from("INSERT INTO `");
         insert.push_str(&self.migration_table_name);
-        insert.push_str("` (`migration`, `hash`, `file_name`, `created_at`) VALUES (?, ?, ?, NOW());");
+        insert.push_str("` (`migration`, `hash`, `type`, `file_name`, `created_at`) VALUES (?, ?, ?, ?, NOW());");
 
         // Do the transaction
         let trx = self.client.start_transaction(TxOpts::default());
@@ -108,7 +108,7 @@ impl SqlEngine for Mysql {
         let file_name = format!("{}", &file.display());
 
         // Store in migration table and commit
-        match trx.exec_drop(&insert as &str, (&version, &hash, &file_name,)) {
+        match trx.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
             Ok(_) => {},
             Err(e) => {
                 crit!("Could store result in migration table: {}", e.to_string());

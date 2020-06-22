@@ -128,7 +128,7 @@ impl SqlEngine for Postgresql {
     fn create_migration_table(&mut self) -> Result<u64, Box<dyn Error>> {
         let mut create_table: String = String::from("CREATE TABLE IF NOT EXISTS \"");
         create_table.push_str(&self.migration_table_name);
-        create_table.push_str("\" (\"migration\" TEXT PRIMARY KEY, \"hash\" TEXT, \"file_name\" TEXT, \"created_at\" TIMESTAMP)");
+        create_table.push_str("\" (\"migration\" TEXT PRIMARY KEY, \"hash\" TEXT, \"type\" TEXT, \"file_name\" TEXT, \"created_at\" TIMESTAMP)");
         match self.client.execute(&create_table as &str, &[]) {
             Ok(i) => Ok(i),
             Err(e) => Err(Box::new(e))
@@ -152,12 +152,12 @@ impl SqlEngine for Postgresql {
         Ok(results)
     }
 
-    fn get_migrations_with_hashes(&mut self) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
+    fn get_migrations_with_hashes(&mut self, migration_type: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
         let mut results: Vec<(String, String, String)> = Vec::new();
         let mut get_migration = String::from("SELECT \"migration\", \"hash\", \"file_name\" FROM \"");
         get_migration.push_str(&self.migration_table_name);
-        get_migration.push_str("\" ORDER BY \"migration\" desc");
-        let data = self.client.query(&get_migration as &str, &[]);
+        get_migration.push_str("\" WHERE \"type\" = $1 ORDER BY \"migration\" desc");
+        let data = self.client.query(&get_migration as &str, &[&migration_type]);
         if data.is_err() {
             let err = data.err().unwrap();
             crit!("Error getting migration: {}", err.to_string());
@@ -169,11 +169,11 @@ impl SqlEngine for Postgresql {
         Ok(results)
     }
 
-    fn migrate(&mut self, file: &PathBuf, version: &str, migration: &str) -> Result<(), Box<dyn Error>> {
+    fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str) -> Result<(), Box<dyn Error>> {
         // Insert statement
         let mut insert = String::from("INSERT INTO \"");
         insert.push_str(&self.migration_table_name);
-        insert.push_str("\" (\"migration\", \"hash\", \"file_name\", \"created_at\") VALUES ($1, $2, $3, NOW());");
+        insert.push_str("\" (\"migration\", \"hash\", \"type\", \"file_name\", \"created_at\") VALUES ($1, $2, $3, $4, NOW());");
 
         // Do the transaction
         let trx = self.client.transaction();
@@ -185,7 +185,7 @@ impl SqlEngine for Postgresql {
 
         // Executing migration
         let mut trx = trx.unwrap();
-        match trx.execute(migration, &[]) {
+        match trx.batch_execute(migration) {
             Ok(_) => {},
             Err(e) => {
                 print_error_postgres(migration, e);
@@ -197,7 +197,7 @@ impl SqlEngine for Postgresql {
         let file_name = format!("{}", &file.display());
 
         // Store in migration table and commit
-        match trx.execute(&insert as &str, &[&version, &hash, &file_name]) {
+        match trx.query(&insert as &str, &[&version, &hash, &migration_type, &file_name]) {
             Ok(_) => {},
             Err(e) => {
                 crit!("Could store result in migration table: {}", e.to_string());
@@ -229,7 +229,7 @@ impl SqlEngine for Postgresql {
 
         // Executing migration
         let mut trx = trx.unwrap();
-        match trx.execute(migration, &[]) {
+        match trx.batch_execute(migration) {
             Ok(_) => {},
             Err(e) => {
                 print_error_postgres(migration, e);
@@ -238,7 +238,7 @@ impl SqlEngine for Postgresql {
         };
 
         // Store in migration table and commit
-        match trx.execute(&del as &str, &[&version]) {
+        match trx.query(&del as &str, &[&version]) {
             Ok(_) => {},
             Err(e) => {
                 crit!("Could store result in migration table: {}", e.to_string());
