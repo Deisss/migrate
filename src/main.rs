@@ -463,6 +463,8 @@ fn main() {
     status = status.name("status")
         .about("check the database status regarding migrations");
 
+    let custom_interactive = interactive.clone();
+
     // Down is a copy of up with the step...
     let mut down = base.clone();
     down = down.name("down")
@@ -497,7 +499,6 @@ fn main() {
         .version("0.1.0")
         .about("Handle migration of database schema")
         .setting(AppSettings::DeriveDisplayOrder)
-        .setting(AppSettings::SubcommandRequired)
         .subcommand(create)
         .subcommand(up)
         .subcommand(down)
@@ -518,13 +519,28 @@ fn main() {
         ("down", Some(down_matches)) => {
             configuration = extract_parameters("down", &down_matches);
         }
-        ("interactive", Some(interactive_matches)) => {
-            configuration = extract_parameters("interactive", &interactive_matches);
-        }
         ("status", Some(status_matches)) => {
             configuration = extract_parameters("status", &status_matches);
         }
-        ("", None) => info!("Use --help to get started with"),
+        ("", interactive_options) | ("interactive", interactive_options) => {
+            if interactive_options.is_some() {
+                configuration = extract_parameters("interactive", &interactive_options.unwrap());
+            } else {
+
+                // We generate some fake pre-defined command args
+                let custom_matches = App::new("Migration")
+                    .subcommand(custom_interactive)
+                    .get_matches_from_safe_borrow(vec!["migrate", "interactive", "-c", "migration"]);
+
+                match custom_matches.unwrap_or_default().subcommand() {
+                    ("interactive", Some(interactive_matches)) => {
+                        configuration = extract_parameters("interactive", &interactive_matches);
+                    },
+                    ("", None) => info!("Use --help to get started with"),
+                    _ => unreachable!(), // If all sub-commands are defined above, anything else is unreachable!()
+                }
+            }
+        },
         _ => unreachable!(), // If all sub-commands are defined above, anything else is unreachable!()
     }
 
