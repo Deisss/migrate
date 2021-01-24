@@ -126,10 +126,10 @@ fn try_to_extract(regex: &str, content: &str) -> Result<(String, String), Box<dy
 /// * `name` - The table name.
 fn get_sample_create_table(engine: &EngineName, name: &str) -> String {
     match engine {
-        EngineName::MYSQL => return format!("CREATE TABLE `{}` (\n\t`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY\n);", &name),
-        EngineName::SQLITE => return format!("CREATE TABLE \"{}\" (\n\t\"id\" INTEGER PRIMARY KEY AUTOINCREMENT\n);", &name),
-        EngineName::POSTGRESQL => return format!("CREATE TABLE \"{}\" (\n\t\"id\" SERIAL PRIMARY KEY\n);", &name),
-    };
+        EngineName::MYSQL => format!("CREATE TABLE `{}` (\n\t`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY\n);", &name),
+        EngineName::SQLITE => format!("CREATE TABLE \"{}\" (\n\t\"id\" INTEGER PRIMARY KEY AUTOINCREMENT\n);", &name),
+        EngineName::POSTGRESQL => format!("CREATE TABLE \"{}\" (\n\t\"id\" SERIAL PRIMARY KEY\n);", &name),
+    }
 }
 
 /// Get sample code for table deletion.
@@ -140,9 +140,9 @@ fn get_sample_create_table(engine: &EngineName, name: &str) -> String {
 /// * `name` - The table name.
 fn get_sample_drop_table(engine: &EngineName, name: &str) -> String {
     match engine {
-        EngineName::MYSQL => return format!("DROP TABLE IF EXISTS `{}`;", &name),
-        EngineName::SQLITE | EngineName::POSTGRESQL => return format!("DROP TABLE IF EXISTS \"{}\";", &name),
-    };
+        EngineName::MYSQL => format!("DROP TABLE IF EXISTS `{}`;", &name),
+        EngineName::SQLITE | EngineName::POSTGRESQL => format!("DROP TABLE IF EXISTS \"{}\";", &name),
+    }
 }
 
 /// Get sample code for column creation.
@@ -158,9 +158,9 @@ fn get_sample_create_column(engine: &EngineName, table_name: &str, column_name: 
         column_name.truncate(column_name.len() - 1);
     }
     match engine {
-        EngineName::MYSQL => return format!("ALTER TABLE `{}` ADD COLUMN `{}` VARCHAR(255);", table_name, &column_name),
-        EngineName::SQLITE | EngineName::POSTGRESQL => return format!("ALTER TABLE \"{}\" ADD COLUMN \"{}\" TEXT;", table_name, &column_name),
-    };
+        EngineName::MYSQL => format!("ALTER TABLE `{}` ADD COLUMN `{}` VARCHAR(255);", table_name, &column_name),
+        EngineName::SQLITE | EngineName::POSTGRESQL => format!("ALTER TABLE \"{}\" ADD COLUMN \"{}\" TEXT;", table_name, &column_name),
+    }
 }
 
 /// Get sample code for column deletion.
@@ -176,11 +176,11 @@ fn get_sample_drop_column(engine: &EngineName, table_name: &str, column_name: &s
         column_name.truncate(column_name.len() - 1);
     }
     match engine {
-        EngineName::MYSQL => return format!("ALTER TABLE `{}` DROP `{}`;", table_name, &column_name),
-        EngineName::POSTGRESQL => return format!("ALTER TABLE \"{}\" DROP COLUMN \"{}\";", table_name, &column_name),
+        EngineName::MYSQL => format!("ALTER TABLE `{}` DROP `{}`;", table_name, &column_name),
+        EngineName::POSTGRESQL => format!("ALTER TABLE \"{}\" DROP COLUMN \"{}\";", table_name, &column_name),
         // SQLite we, on purpose, do nothing
-        EngineName::SQLITE => return String::from("")
-    };
+        EngineName::SQLITE => String::from("")
+    }
 }
 
 /// Get sample code for index creation.
@@ -196,8 +196,8 @@ fn get_sample_create_index(engine: &EngineName, table_name: &str, index_name: &s
         index_name.truncate(index_name.len() - 1);
     }
     match engine {
-        EngineName::MYSQL | EngineName::SQLITE | EngineName::POSTGRESQL => return format!("CREATE INDEX \"idx_{}_{}\" ON \"{}\"(\"{}\");", table_name, &index_name, table_name, &index_name),
-    };
+        EngineName::MYSQL | EngineName::SQLITE | EngineName::POSTGRESQL => format!("CREATE INDEX \"idx_{}_{}\" ON \"{}\"(\"{}\");", table_name, &index_name, table_name, &index_name),
+    }
 }
 
 /// Get sample code for index deletion.
@@ -213,8 +213,214 @@ fn get_sample_drop_index(engine: &EngineName, table_name: &str, index_name: &str
         index_name.truncate(index_name.len() - 1);
     }
     match engine {
-        EngineName::MYSQL | EngineName::SQLITE | EngineName::POSTGRESQL => return format!("DROP INDEX IF EXISTS \"idx_{}_{}\";", table_name, &index_name),
-    };
+        EngineName::MYSQL | EngineName::SQLITE | EngineName::POSTGRESQL => format!("DROP INDEX IF EXISTS \"idx_{}_{}\";", table_name, &index_name),
+    }
+}
+
+/// Get sample code for function creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The function name.
+fn get_sample_create_function(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => format!("DELIMITER $$\nCREATE FUNCTION `{}`()\nRETURNS decimal\nDETERMINISTIC\nBEGIN\nRETURN 10;\nEND$$\nDELIMITER;", &name),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support SQL functions"),
+        EngineName::POSTGRESQL => format!("CREATE OR REPLACE FUNCTION \"{}\"() RETURNS void AS $func$\nDECLARE\nBEGIN\nEND\n$func$ LANGUAGE plpgsql;", &name),
+    }
+}
+
+/// Get sample code for function deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The function name.
+fn get_sample_drop_function(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => format!("DROP FUNCTION IF EXISTS `{}`;", &name),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support SQL functions"),
+        EngineName::POSTGRESQL => format!("DROP FUNCTION IF EXISTS \"{}\"();", &name),
+    }
+}
+
+/// Get sample code for enum creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The enum name.
+fn get_sample_create_enum(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support user defined types"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support user defined types"),
+        EngineName::POSTGRESQL => format!("CREATE TYPE \"{}\" AS ENUM (\n    'first',\n    'second'\n);", &name),
+    }
+}
+
+/// Get sample code for enum deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The enum name.
+fn get_sample_drop_enum(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support user defined types"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support user defined types"),
+        EngineName::POSTGRESQL => format!("DROP TYPE IF EXISTS \"{}\";", &name),
+    }
+}
+
+/// Get sample code for type creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The type name.
+fn get_sample_create_type(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support user defined types"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support user defined types"),
+        EngineName::POSTGRESQL => format!("CREATE TYPE \"{}\" AS (\n    \"property1\" INT,\n    \"property2\" TEXT\n);", &name),
+    }
+}
+
+/// Get sample code for type deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The type name.
+fn get_sample_drop_type(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support user defined types"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support user defined types"),
+        EngineName::POSTGRESQL => format!("DROP TYPE IF EXISTS \"{}\";", &name),
+    }
+}
+
+/// Get sample code for domain creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The domain name.
+fn get_sample_create_domain(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support domain"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support domain"),
+        EngineName::POSTGRESQL => format!("CREATE DOMAIN \"{}\" INT CHECK (VALUE > 0 AND VALUE < 999);", &name),
+    }
+}
+
+/// Get sample code for domain deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The domain name.
+fn get_sample_drop_domain(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support domain"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support domain"),
+        EngineName::POSTGRESQL => format!("DROP DOMAIN IF EXISTS \"{}\";", &name),
+    }
+}
+
+/// Get sample code for view creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The view name.
+fn get_sample_create_view(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => format!("CREATE OR REPLACE VIEW `{}` AS SELECT 'Hello World' AS `hello`", &name),
+        EngineName::SQLITE => format!("CREATE VIEW \"{}\" AS SELECT 'Hello World' AS \"hello\"", &name),
+        EngineName::POSTGRESQL => format!("CREATE OR REPLACE VIEW \"{}\" AS SELECT text 'Hello World' AS \"hello\";", &name),
+    }
+}
+
+/// Get sample code for view deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The view name.
+fn get_sample_drop_view(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => format!("DROP VIEW IF EXISTS `{}`", &name),
+        EngineName::SQLITE => format!("DROP VIEW IF EXISTS \"{}\"", &name),
+        EngineName::POSTGRESQL => format!("DROP VIEW IF EXISTS \"{}\";", &name),
+    }
+}
+
+/// Get sample code for materialized view creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The materialized view name.
+fn get_sample_create_materialized_view(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support materialized view"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support materialized view"),
+        EngineName::POSTGRESQL => format!("CREATE MATERIALIZED VIEW \"{}\" AS SELECT text 'Hello World' AS \"hello\";", &name),
+    }
+}
+
+/// Get sample code for materialized view deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `name` - The materialized view name.
+fn get_sample_drop_materialized_view(engine: &EngineName, name: &str) -> String {
+    match engine {
+        EngineName::MYSQL => String::from("-- MySQL doesn't support materialized view"),
+        EngineName::SQLITE => String::from("-- SQLite doesn't support materialized view"),
+        EngineName::POSTGRESQL => format!("DROP MATERIALIZED VIEW IF EXISTS \"{}\";", &name),
+    }
+}
+
+/// Get sample code for trigger creation.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `trigger_name` - The trigger name.
+/// * `table_name` - The table name.
+fn get_sample_create_trigger(engine: &EngineName, trigger_name: &str, table_name: &str) -> String {
+    let mut trigger_name = String::from(trigger_name);
+    while trigger_name.ends_with("_") {
+        trigger_name.truncate(trigger_name.len() - 1);
+    }
+    match engine {
+        EngineName::MYSQL => format!("DELIMITER $$\n\nCREATE TRIGGER `{}`\n    AFTER INSERT\n    ON `{}` FOR EACH ROW\nBEGIN\n    -- statements\nEND$$\n\nDELIMITER ;", trigger_name, &table_name),
+        EngineName::SQLITE => format!("CREATE TRIGGER IF NOT EXISTS \"{}\"\n    AFTER INSERT\n   ON \"{}\"\nBEGIN\n    -- statements\nEND;", trigger_name, &table_name),
+        EngineName::POSTGRESQL => format!("CREATE TRIGGER \"{}\"\n    AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE\n    ON \"{}\"\n    FOR EACH STATEMENT\nEXECUTE PROCEDURE my_function();", trigger_name, &table_name),
+    }
+}
+
+/// Get sample code for trigger deletion.
+///
+/// # Arguments
+///
+/// * `engine` - The engine type.
+/// * `trigger_name` - The trigger name.
+/// * `table_name` - The table name.
+fn get_sample_drop_trigger(engine: &EngineName, trigger_name: &str, table_name: &str) -> String {
+    let mut trigger_name = String::from(trigger_name);
+    while trigger_name.ends_with("_") {
+        trigger_name.truncate(trigger_name.len() - 1);
+    }
+    match engine {
+        EngineName::MYSQL => format!("DROP TRIGGER IF EXISTS `{}`;", trigger_name),
+        EngineName::POSTGRESQL => format!("DROP TRIGGER IF EXISTS \"{}\" ON \"{}\";", trigger_name, &table_name),
+        EngineName::SQLITE => format!("DROP TRIGGER IF EXISTS \"{}\";", trigger_name),
+    }
 }
 
 /// Try to generate a sample of the asked up command.
@@ -225,7 +431,7 @@ fn get_sample_drop_index(engine: &EngineName, table_name: &str, index_name: &str
 fn get_sample(mode: usize, configuration: &Configuration) -> String {
     let s = configuration.create_name.clone();
 
-    // Create table command
+    // Create table
     match try_to_extract(r"^(create|add)_?table_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
         Ok((name, _)) => {
             if name.len() > 0 {
@@ -253,7 +459,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
         Err(e) => crit!("{}", e),
     };
 
-    // Add column command
+    // Add column
     match try_to_extract(r"^(create|add)_?column_?(?P<column>[a-zA-Z0-9\-_]+)_?to_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
         Ok((table_name, column_name)) => {
             if table_name.len() > 0 && column_name.len() > 0 {
@@ -270,7 +476,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
         Err(e) => crit!("{}", e),
     };
 
-    // Remove/drop column
+    // Remove column
     match try_to_extract(r"^(remove|drop)_?column_?(?P<column>[a-zA-Z0-9\-_]+)_?from_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
         Ok((table_name, column_name)) => {
             if table_name.len() > 0 && column_name.len() > 0 {
@@ -301,7 +507,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
         Err(e) => crit!("{}", e),
     };
 
-    // remove/drop index
+    // Remove index
     match try_to_extract(r"^(remove|drop)_?index_?for_?(?P<column>[a-zA-Z0-9\-_]+)_?on_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
         Ok((table_name, column_name)) => {
             if table_name.len() > 0 && column_name.len() > 0 {
@@ -309,6 +515,208 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                     return get_sample_drop_index(&configuration.engine, &table_name, &column_name);
                 } else {
                     return get_sample_create_index(&configuration.engine, &table_name, &column_name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create function
+    match try_to_extract(r"^(create|add)_?(function|plsql|psql)_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_function(&configuration.engine, &name);
+                } else {
+                    return get_sample_drop_function(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove function
+    match try_to_extract(r"^(remove|drop)_?(function|plsql|psql)_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_drop_function(&configuration.engine, &name);
+                } else {
+                    return get_sample_create_function(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create enum
+    match try_to_extract(r"^(create|add)_?enum_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_enum(&configuration.engine, &name);
+                } else {
+                    return get_sample_drop_enum(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove enum
+    match try_to_extract(r"^(remove|drop)_?enum_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_drop_enum(&configuration.engine, &name);
+                } else {
+                    return get_sample_create_enum(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create type
+    match try_to_extract(r"^(create|add)_?type_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_type(&configuration.engine, &name);
+                } else {
+                    return get_sample_drop_type(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove type
+    match try_to_extract(r"^(remove|drop)_?type_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_drop_type(&configuration.engine, &name);
+                } else {
+                    return get_sample_create_type(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create domain
+    match try_to_extract(r"^(create|add)_?domain_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_domain(&configuration.engine, &name);
+                } else {
+                    return get_sample_drop_domain(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove domain
+    match try_to_extract(r"^(remove|drop)_?domain_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_drop_domain(&configuration.engine, &name);
+                } else {
+                    return get_sample_create_domain(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create view
+    match try_to_extract(r"^(create|add)_?view_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_view(&configuration.engine, &name);
+                } else {
+                    return get_sample_drop_view(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove view
+    match try_to_extract(r"^(remove|drop)_?view_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_drop_view(&configuration.engine, &name);
+                } else {
+                    return get_sample_create_view(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create materialized view
+    match try_to_extract(r"^(create|add)_?materialized_view_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_materialized_view(&configuration.engine, &name);
+                } else {
+                    return get_sample_drop_materialized_view(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove materialized view
+    match try_to_extract(r"^(remove|drop)_?materialized_view_?(?P<name>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((name, _)) => {
+            if name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_drop_materialized_view(&configuration.engine, &name);
+                } else {
+                    return get_sample_create_materialized_view(&configuration.engine, &name);
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Create trigger
+    match try_to_extract(r"^(create|add)_?trigger_?(?P<name>[a-zA-Z0-9\-_]+)_?on_?(?P<table>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((trigger_name, table_name)) => {
+            if trigger_name.len() > 0 && table_name.len() > 0 {
+                if mode == 0 {
+                    return get_sample_create_trigger(&configuration.engine, &trigger_name, &table_name);
+                } else {
+                    let res = get_sample_drop_trigger(&configuration.engine, &trigger_name, &table_name);
+                    if res.len() > 0 {
+                        return res;
+                    }
+                }
+            }
+        },
+        Err(e) => crit!("{}", e),
+    };
+
+    // Remove trigger
+    match try_to_extract(r"^(remove|drop)_?trigger_?(?P<name>[a-zA-Z0-9\-_]+)_?on_?(?P<table>[a-zA-Z0-9\-_]+)$", &s) {
+        Ok((trigger_name, table_name)) => {
+            if trigger_name.len() > 0 && table_name.len() > 0 {
+                if mode == 0 {
+                    let res = get_sample_drop_trigger(&configuration.engine, &trigger_name, &table_name);
+                    if res.len() > 0 {
+                        return res;
+                    }
+                } else {
+                    return get_sample_create_trigger(&configuration.engine, &trigger_name, &table_name);
                 }
             }
         },
@@ -328,7 +736,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
 ///
 /// * `folder` - The folder to put migration into.
 /// * `configuration` - The migration configuration.
-fn get_file_content(t: usize, configuration: &Configuration, time: &CurrentTime) -> String {
+fn get_file_content(t: usize, configuration: &Configuration) -> String {
     let mut s: String = String::new();
     let mut up_command = String::new();
     let mut down_command = String::new();
@@ -342,13 +750,9 @@ fn get_file_content(t: usize, configuration: &Configuration, time: &CurrentTime)
 
     // Up command (or single file)
     if configuration.create_type == CreateType::FILE || t == 1 {
-        s.push_str(&format!("-- Migration: {}\n-- Created at: {}-{}-{} {}:{}:{}\n{}\n{}\n",
-            &configuration.create_name, &time.year, &time.month, &time.day, &time.hour,
-            &time.minute, &time.second, &up_command, &up_sample));
+        s.push_str(&format!("{}\n{}\n", &up_command, &up_sample));
     } else if t == 2 {
-        s.push_str(&format!("-- Migration: {}\n-- Created at: {}-{}-{} {}:{}:{}\n{}\n{}\n",
-            &configuration.create_name, &time.year, &time.month, &time.day, &time.hour,
-            &time.minute, &time.second, &down_command, &down_sample));
+        s.push_str(&format!("{}\n{}\n", &down_command, &down_sample));
     }
 
     // Down command (or single file)
@@ -393,7 +797,7 @@ fn process_create(folder: &str, configuration: &Configuration) {
             debug!("File to be created:");
             debug!("{}", full_filename.display());
         } else {
-            create_file(&full_filename, &get_file_content(0, &configuration, &t));
+            create_file(&full_filename, &get_file_content(0, &configuration));
         }
 
     } else if configuration.create_type == CreateType::FOLDER {
@@ -412,8 +816,8 @@ fn process_create(folder: &str, configuration: &Configuration) {
                 debug!("{}", full_filename_up.display());
                 debug!("{}", full_filename_down.display());
             } else {
-                create_file(&full_filename_up, &get_file_content(1, &configuration, &t));
-                create_file(&full_filename_down, &get_file_content(2, &configuration, &t));
+                create_file(&full_filename_up, &get_file_content(1, &configuration));
+                create_file(&full_filename_down, &get_file_content(2, &configuration));
             }
         }
 
@@ -426,8 +830,8 @@ fn process_create(folder: &str, configuration: &Configuration) {
             debug!("{}", full_filename_up.display());
             debug!("{}", full_filename_down.display());
         } else {
-            create_file(&full_filename_up, &get_file_content(1, &configuration, &t));
-            create_file(&full_filename_down, &get_file_content(2, &configuration, &t));
+            create_file(&full_filename_up, &get_file_content(1, &configuration));
+            create_file(&full_filename_down, &get_file_content(2, &configuration));
         }
     }
 }
