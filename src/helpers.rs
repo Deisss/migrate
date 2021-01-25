@@ -1,4 +1,6 @@
 use chrono::{Duration, Utc};
+use crate::Configuration;
+use regex::Regex;
 
 /// Transform a time into a readable time.
 ///
@@ -153,4 +155,29 @@ pub fn limit_number(number: &str) -> String {
     }
 
     s
+}
+
+/// Fit a number into the given size allowed (16 chars).
+///
+/// # Arguments
+///
+/// * `configuration` - The current configuration.
+/// * `sql` - The current migration file (can contains a specific skip transaction).
+pub fn skip_transaction(configuration: &Configuration, sql: &str) -> bool {
+    match configuration.skip_transactions {
+        true => true,
+        false => {
+            let lines = sql.lines();
+            let re = Regex::new(r"^--\s*migrate\s*:\s*no-transaction$").unwrap();
+
+            // if any of the lines contains the following, we skip.
+            for s in lines {
+                if re.is_match(s) {
+                    return true;
+                }
+            }
+
+            false
+        }
+    }
 }

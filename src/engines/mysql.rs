@@ -79,89 +79,131 @@ impl SqlEngine for Mysql {
         Ok(data.unwrap())
     }
 
-    fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str) -> Result<(), Box<dyn Error>> {
+    fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
         // Insert statement
         let mut insert = String::from("INSERT INTO `");
         insert.push_str(&self.migration_table_name);
         insert.push_str("` (`migration`, `hash`, `type`, `file_name`, `created_at`) VALUES (?, ?, ?, ?, NOW());");
 
-        // Do the transaction
-        let trx = self.client.start_transaction(TxOpts::default());
-        if trx.is_err() {
-            let err = trx.err().unwrap();
-            crit!("Could not create a transaction: {}", err.to_string());
-            return Err(Box::new(err));
-        }
+        if skip_transaction {
+            // Executing migration
+            match self.client.query_drop(migration) {
+                Ok(_) => {},
+                Err(e) => {
+                    crit!("{}", e);
+                    return Err(Box::new(EngineError {}));
+                }
+            };
 
-        // Executing migration
-        let mut trx = trx.unwrap();
-        match trx.query_drop(migration) {
-            Ok(_) => {},
-            Err(e) => {
-                crit!("{}", e);
-                //print_error_postgres(migration, e);
-                return Err(Box::new(EngineError {}));
+            let hash = format!("{:x}", md5::compute(&migration));
+            let file_name = format!("{}", &file.display());
+
+            // Store in migration table and commit
+            match self.client.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    crit!("Could store result in migration table: {}", e.to_string());
+                    return Err(Box::new(e));
+                }
             }
-        };
-
-        let hash = format!("{:x}", md5::compute(&migration));
-        let file_name = format!("{}", &file.display());
-
-        // Store in migration table and commit
-        match trx.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
-            Ok(_) => {},
-            Err(e) => {
-                crit!("Could store result in migration table: {}", e.to_string());
-                return Err(Box::new(e));
+        } else {
+            // Do the transaction
+            let trx = self.client.start_transaction(TxOpts::default());
+            if trx.is_err() {
+                let err = trx.err().unwrap();
+                crit!("Could not create a transaction: {}", err.to_string());
+                return Err(Box::new(err));
             }
-        };
-        match trx.commit() {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                crit!("Failed to commit transaction: {}", e.to_string());
-                Err(Box::new(e))
+
+            // Executing migration
+            let mut trx = trx.unwrap();
+            match trx.query_drop(migration) {
+                Ok(_) => {},
+                Err(e) => {
+                    crit!("{}", e);
+                    return Err(Box::new(EngineError {}));
+                }
+            };
+
+            let hash = format!("{:x}", md5::compute(&migration));
+            let file_name = format!("{}", &file.display());
+
+            // Store in migration table and commit
+            match trx.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
+                Ok(_) => {},
+                Err(e) => {
+                    crit!("Could store result in migration table: {}", e.to_string());
+                    return Err(Box::new(e));
+                }
+            };
+            match trx.commit() {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    crit!("Failed to commit transaction: {}", e.to_string());
+                    Err(Box::new(e))
+                }
             }
         }
     }
 
-    fn rollback(&mut self, _file: &PathBuf, version: &str, migration: &str) -> Result<(), Box<dyn Error>> {
+    fn rollback(&mut self, _file: &PathBuf, version: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
         // Delete statement
         let mut del = String::from("DELETE FROM `");
         del.push_str(&self.migration_table_name);
         del.push_str("` WHERE `migration` = ?;");
 
-        // Do the transaction
-        let trx = self.client.start_transaction(TxOpts::default());
-        if trx.is_err() {
-            let err = trx.err().unwrap();
-            crit!("Could not create a transaction: {}", err.to_string());
-            return Err(Box::new(err));
-        }
+        if skip_transaction {
+            // Executing migration
+            match self.client.query_drop(migration) {
+                Ok(_) => {},
+                Err(e) => {
+                    crit!("{}", e);
+                    return Err(Box::new(EngineError {}));
+                }
+            };
 
-        // Executing migration
-        let mut trx = trx.unwrap();
-        match trx.query_drop(migration) {
-            Ok(_) => {},
-            Err(e) => {
-                crit!("{}", e);
-                //print_error_postgres(migration, e);
-                return Err(Box::new(EngineError {}));
+            // Store in migration table and commit
+            match self.client.exec_drop(&del as &str, (&version,)) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    crit!("Could store result in migration table: {}", e.to_string());
+                    return Err(Box::new(e));
+                }
             }
-        };
 
-        // Store in migration table and commit
-        match trx.exec_drop(&del as &str, (&version,)) {
-            Ok(_) => {},
-            Err(e) => {
-                crit!("Could store result in migration table: {}", e.to_string());
-                return Err(Box::new(e));
+        } else {
+            // Do the transaction
+            let trx = self.client.start_transaction(TxOpts::default());
+            if trx.is_err() {
+                let err = trx.err().unwrap();
+                crit!("Could not create a transaction: {}", err.to_string());
+                return Err(Box::new(err));
             }
-        };
-        match trx.commit() {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                crit!("Failed to commit transaction: {}", e.to_string());
-                Err(Box::new(e))
+
+            // Executing migration
+            let mut trx = trx.unwrap();
+            match trx.query_drop(migration) {
+                Ok(_) => {},
+                Err(e) => {
+                    crit!("{}", e);
+                    return Err(Box::new(EngineError {}));
+                }
+            };
+
+            // Store in migration table and commit
+            match trx.exec_drop(&del as &str, (&version,)) {
+                Ok(_) => {},
+                Err(e) => {
+                    crit!("Could store result in migration table: {}", e.to_string());
+                    return Err(Box::new(e));
+                }
+            };
+            match trx.commit() {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    crit!("Failed to commit transaction: {}", e.to_string());
+                    Err(Box::new(e))
+                }
             }
         }
     }

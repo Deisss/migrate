@@ -1,6 +1,6 @@
 use crate::Configuration;
 use crate::EngineName;
-use crate::helpers::readable_time;
+use crate::helpers::{readable_time, skip_transaction};
 use crate::engines::{get_sql_engine, EngineError};
 use crate::filesystem::{File, get_sql, migrations, get_file_path_without_migration_path};
 use super::debug_configuration;
@@ -53,7 +53,7 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
         info!("{} -> migrating", &file_name);
         let error: bool = match get_sql(&file, 1) {
             Ok(sql) => {
-                match db.migrate(&file.origin, &file.number.to_string(), &configuration.migration_type, &sql) {
+                match db.migrate(&file.origin, &file.number.to_string(), &configuration.migration_type, &sql, skip_transaction(&configuration, &sql)) {
                     Err(_e) => true,
                     _ => false
                 }

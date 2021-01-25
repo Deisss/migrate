@@ -29,8 +29,8 @@ pub trait SqlEngine {
     fn create_migration_table(&mut self) -> Result<u64, Box<dyn Error>>;
     fn get_migrations(&mut self) -> Result<Vec<String>, Box<dyn Error>>;
     fn get_migrations_with_hashes(&mut self, migration_type: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>>;
-    fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str) -> Result<(), Box<dyn Error>>;
-    fn rollback(&mut self, file: &PathBuf, version: &str, migration: &str) -> Result<(), Box<dyn Error>>;
+    fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>>;
+    fn rollback(&mut self, file: &PathBuf, version: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>>;
 }
 
 /// Generate the URL for postgresql connexion.

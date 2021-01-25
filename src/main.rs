@@ -82,6 +82,7 @@ pub struct Configuration {
     version: String,
     step: u32,
     debug: bool,
+    skip_transactions: bool,
 
     // Specific to interactive
     interactive_days: u32,
@@ -201,11 +202,12 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
         table: args.value_of("migration_table").unwrap_or(&file_configuration.table).to_string(),
         path: args.value_of("path").unwrap_or(&file_configuration.path).to_string(),
         interactive: args.is_present("interactive"),
-        continue_on_error: args.is_present("continueonerror"),
+        continue_on_error: args.is_present("continue-on-error"),
         version: args.value_of("version").unwrap_or("").to_string(),
         migration_type: file_configuration.migration_type,
         step: 0,
         debug: args.is_present("debug"),
+        skip_transactions: args.is_present("skip-transactions"),
         interactive_days: 0,
         create_name: args.value_of("name").unwrap_or("").to_string(),
         create_type: CreateType::FOLDER,
@@ -430,9 +432,14 @@ fn main() {
             .help("Rollback X step(s) from the last found in database")
             .conflicts_with("version")
             .takes_value(true))
-        .arg(Arg::with_name("continueonerror")
+        .arg(Arg::with_name("skip-transactions")
+            .long("skip-transactions")
+            .help("If set, each file that has to be migrated WILL NOT run in a transaction, note that you can set this per file")
+            .takes_value(false))
+        .arg(Arg::with_name("continue-on-error")
             .long("continue-on-error")
-            .help("Continue if an error is encoutered (not recommended)"));
+            .help("Continue if an error is encoutered (not recommended)")
+            .takes_value(false));
 
     // Interactive also supports version but it's a different thing...
     let mut interactive = base.clone();
@@ -457,6 +464,10 @@ fn main() {
         .arg(Arg::with_name("last-month")
             .long("last-month")
             .help("Same as days except it automatically takes 31 days")
+            .takes_value(false))
+        .arg(Arg::with_name("skip-transactions")
+            .long("skip-transactions")
+            .help("If set, each file that has to be migrated WILL NOT run in a transaction, note that you can set this per file")
             .takes_value(false));
 
     let mut status = interactive.clone();
@@ -470,26 +481,31 @@ fn main() {
     down = down.name("down")
            .about("rollback database")
         .arg(Arg::with_name("version")
-           .long("version")
-           .value_name("VERSION")
-           .help("Take care of only one specific migration script (based on timestamp)")
-           .conflicts_with("step")
-           .takes_value(true))
-        .arg(Arg::with_name("continueonerror")
-           .long("continue-on-error")
-           .help("Continue if an error is encoutered (not recommended)"))
+            .long("version")
+            .value_name("VERSION")
+            .help("Take care of only one specific migration script (based on timestamp)")
+            .conflicts_with("step")
+            .takes_value(true))
+        .arg(Arg::with_name("skip-transactions")
+            .long("skip-transactions")
+            .help("If set, each file that has to be migrated WILL NOT run in a transaction, note that you can set this per file")
+            .takes_value(false))
+        .arg(Arg::with_name("continue-on-error")
+            .long("continue-on-error")
+            .help("Continue if an error is encoutered (not recommended)")
+            .takes_value(false))
         .arg(Arg::with_name("migration_table")
-           .long("migration_table")
-           .short("t")
-           .value_name("TABLE_NAME")
-           .help("Set the default migration table name")
-           .takes_value(true))
+            .long("migration_table")
+            .short("t")
+            .value_name("TABLE_NAME")
+            .help("Set the default migration table name")
+            .takes_value(true))
         .arg(Arg::with_name("step")
-           .long("step")
-           .value_name("NUMBER_OF_STEP")
-           .help("Rollback X step(s) from the last found in database")
-           .conflicts_with("version")
-           .takes_value(true))
+            .long("step")
+            .value_name("NUMBER_OF_STEP")
+            .help("Rollback X step(s) from the last found in database")
+            .conflicts_with("version")
+            .takes_value(true))
         .arg(Arg::with_name("all")
             .long("all")
             .help("If set, will rollback everything (dangerous)")

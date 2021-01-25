@@ -1,7 +1,7 @@
 use crate::Configuration;
 use crate::EngineName;
 
-use crate::helpers::readable_time;
+use crate::helpers::{readable_time, skip_transaction};
 use crate::engines::{get_sql_engine, EngineError};
 use crate::filesystem::{File, get_sql, migrations, get_file_path_without_migration_path};
 use super::debug_configuration;
@@ -55,7 +55,7 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
 
         let error: bool = match get_sql(&file, 0) {
             Ok(sql) => {
-                match db.rollback(&file.origin, &file.number.to_string(), &sql) {
+                match db.rollback(&file.origin, &file.number.to_string(), &sql, skip_transaction(&configuration, &sql)) {
                     Err(_e) => true,
                     _ => false
                 }
