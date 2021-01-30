@@ -512,7 +512,7 @@ fn main() {
             .takes_value(false));
 
     let matches = App::new("Migration")
-        .version("0.1.0")
+        .version("0.1.3")
         .about("Handle migration of database schema")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand(create)

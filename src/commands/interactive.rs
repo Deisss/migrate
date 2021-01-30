@@ -204,7 +204,7 @@ fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, s
                 } else if f_hash.is_some() {
                     content.push_str(&format!("  {}  ", yellow.apply_to("changed")));
                 } else {
-                    content.push_str(&format!("  {}  ", yellow.apply_to("missing")));
+                    content.push_str(&format!("  {}  ", not_installed.apply_to("missing")));
                 }
                 
             } else {
@@ -401,7 +401,7 @@ fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>)
 fn show_partial_recap_menu(name: &str, root: &str, migrations: &Vec<InteractiveMigration>, interaction: InteractionType) {
     let mut first = true;
     for migration in migrations {
-        if migration.new_type == interaction || migration.new_type == InteractionType::REDO {
+        if (migration.new_type == interaction || migration.new_type == InteractionType::REDO) && (migration.file_down.is_some() || migration.file_up.is_some()) {
             if first == true {
                 first = false;
                 println!("{}", name);
@@ -491,10 +491,10 @@ fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>)
         if confirm {
             // First we do down + redo, in a reverse order
             let mut migration_up: Vec<File> = to_show.iter()
-                .filter(|x| x.new_type == InteractionType::UP || x.new_type == InteractionType::REDO)
+                .filter(|x| (x.new_type == InteractionType::UP || x.new_type == InteractionType::REDO) && x.file_up.is_some())
                 .map(|x| x.file_up.as_ref().unwrap().clone()).collect();
             let mut migration_down: Vec<File> = to_show.iter()
-                .filter(|x| x.new_type == InteractionType::DOWN || x.new_type == InteractionType::REDO)
+                .filter(|x| (x.new_type == InteractionType::DOWN || x.new_type == InteractionType::REDO) && x.file_down.is_some())
                 .map(|x| x.file_down.as_ref().unwrap().clone()).collect();
 
             // We make sure they are in the right order

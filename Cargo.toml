@@ -1,6 +1,6 @@
 [package]
 name = "migrate"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Deisss <deisss@free.fr>"]
 edition = "2018"
 license = "MIT"
