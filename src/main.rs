@@ -179,11 +179,11 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
 
     if args.is_present("engine") {
         let engine = args.value_of("engine").unwrap_or("postgresql");
-        match engine {
-            "mysql" => configuration.engine = EngineName::MYSQL,
-            "sqlite" => configuration.engine = EngineName::SQLITE,
-            _ => configuration.engine = EngineName::POSTGRESQL
-        }
+        configuration.engine = match engine {
+            "mysql" => EngineName::MYSQL,
+            "sqlite" => EngineName::SQLITE,
+            _ => EngineName::POSTGRESQL
+        };
     }
 
     if args.is_present("password") {
@@ -195,17 +195,19 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
 
     // Specific to interactive command
     if cmd == "interactive" || cmd == "status" {
-        if cmd == "interactive" {
-            configuration.command = CommandName::INTERACTIVE;
+        configuration.command = if cmd == "interactive" {
+            CommandName::INTERACTIVE
         } else {
-            configuration.command = CommandName::STATUS;
-        }
+            CommandName::STATUS
+        };
 
-        if args.is_present("days") {
-            configuration.interactive_days = args.value_of("days").unwrap_or("0").parse::<u32>().unwrap_or(0);
+        configuration.interactive_days = if args.is_present("days") {
+            args.value_of("days").unwrap_or("0").parse::<u32>().unwrap_or(0)
         } else if args.is_present("last-month") {
-            configuration.interactive_days = 31;
-        }
+            31
+        } else {
+            0
+        };
     }
 
     // Specific to up command
@@ -228,11 +230,11 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
     if cmd == "create" {
         configuration.command = CommandName::CREATE;
         let create_type = args.value_of("folder_type").unwrap_or("folder");
-        match create_type {
-            "file" | "files" => configuration.create_type = CreateType::FILE,
-            "split" | "split-file" | "split-files" => configuration.create_type = CreateType::SPLITFILES,
-            _ => configuration.create_type = CreateType::FOLDER
-        }
+        configuration.create_type = match create_type {
+            "file" | "files" => CreateType::FILE,
+            "split" | "split-file" | "split-files" => CreateType::SPLITFILES,
+            _ => CreateType::FOLDER
+        };
     }
 
     // Url override everything
