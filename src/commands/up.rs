@@ -107,16 +107,17 @@ pub fn process(configuration: &Configuration) -> bool {
     files.retain(|file| file.is_up);
     files.sort_by(|f1, f2| f1.partial_cmp(f2).unwrap());
 
-    if files.len() == 0 {
-        info!("Nothing to migrate");
-        return true;
-    }
-
-    match configuration.engine {
-        EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
-            match process_up_sql(configuration, &mut files) {
-                Err(_e) => false,
-                _ => true
+    match files.len() {
+        0 => {
+            info!("Nothing to migrate");
+            true
+        },
+        _ => match configuration.engine {
+            EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
+                match process_up_sql(configuration, &mut files) {
+                    Err(_e) => false,
+                    _ => true
+                }
             }
         }
     }

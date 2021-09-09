@@ -110,16 +110,17 @@ pub fn process(configuration: &Configuration) -> bool {
     files.retain(|file| file.is_down);
     files.sort_by(|f1, f2| f2.partial_cmp(f1).unwrap());
 
-    if files.len() == 0 {
-        info!("Nothing to revert");
-        return true;
-    }
-
-    match configuration.engine {
-        EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
-            match process_down_sql(configuration, &mut files) {
-                Err(_e) => false,
-                _ => true
+    match files.len() {
+        0 => {
+            info!("Nothing to revert");
+            true
+        },
+        _ => match configuration.engine {
+            EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
+                match process_down_sql(configuration, &mut files) {
+                    Err(_e) => false,
+                    _ => true
+                }
             }
         }
     }
