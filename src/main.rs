@@ -216,12 +216,12 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
     // Specific to down command
     if cmd == "down" {
         configuration.command = CommandName::DOWN;
-        if args.is_present("all") {
-            configuration.step = 0;
+        configuration.step = if args.is_present("all") {
+            0
         } else {
             // Default, if nothing is set, will be 1.
-            configuration.step = args.value_of("step").unwrap_or("1").parse::<u32>().unwrap_or(1);
-        }
+            args.value_of("step").unwrap_or("1").parse::<u32>().unwrap_or(1)
+        };
     }
 
     // Specific to create command

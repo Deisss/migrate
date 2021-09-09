@@ -66,14 +66,14 @@ fn get_current_time() -> CurrentTime {
 ///
 /// * `path` - The folder to create.
 fn create_folder(configuration: &Configuration, path: &str) -> bool {
-    if configuration.debug == true {
-        return true;
-    }
-    match create_dir_all(path) {
-        Ok(_) => return true,
-        Err(e) => {
-            crit!("Could not create migration folder: {}", e);
-            return false;
+    match configuration.debug {
+        true => true,
+        false => match create_dir_all(path) {
+            Ok(_) => true,
+            Err(e) => {
+                crit!("Could not create migration folder: {}", e);
+                false
+            }
         }
     }
 }
