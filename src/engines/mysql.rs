@@ -38,9 +38,7 @@ impl Mysql {
 
 impl SqlEngine for Mysql {
     fn create_migration_table(&mut self) -> Result<u64, Box<dyn Error>> {
-        let mut create_table: String = String::from("CREATE TABLE IF NOT EXISTS `");
-        create_table.push_str(&self.migration_table_name);
-        create_table.push_str("` (`migration` VARCHAR(20) PRIMARY KEY, `hash` VARCHAR(32), `type` VARCHAR(255), `file_name` TEXT, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+        let create_table = format!("CREATE TABLE IF NOT EXISTS `{}` (`migration` VARCHAR(20) PRIMARY KEY, `hash` VARCHAR(32), `type` VARCHAR(255), `file_name` TEXT, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP)", self.migration_table_name);
         match self.client.query_drop(&create_table as &str) {
             Ok(_) => Ok(0),
             Err(e) => Err(Box::new(e))
@@ -48,15 +46,10 @@ impl SqlEngine for Mysql {
     }
 
     fn get_migrations(&mut self) -> Result<Vec<String>, Box<dyn Error>> {
-        //let mut results: Vec<String> = Vec::new();
-        let mut get_migration = String::from("SELECT `migration` FROM `");
-        get_migration.push_str(&self.migration_table_name);
-        get_migration.push_str("` ORDER BY `migration` desc");
-
+        let get_migration = format!("SELECT `migration` FROM `{}` ORDER BY `migration` DESC", self.migration_table_name);
         let data = self.client.query_map(&get_migration, |migration: String| {
             String::from(migration)
         });
-
         match data {
             Ok(data) => Ok(data),
             Err(e) => {
@@ -67,14 +60,10 @@ impl SqlEngine for Mysql {
     }
 
     fn get_migrations_with_hashes(&mut self, migration_type: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
-        let mut get_migration = String::from("SELECT `migration`, `hash`, `file_name` FROM `");
-        get_migration.push_str(&self.migration_table_name);
-        get_migration.push_str("` WHERE `type` = ? ORDER BY `migration` desc");
-
+        let get_migration = format!("SELECT `migration`, `hash`, `file_name` FROM `{}` WHERE `type` = ? ORDER BY `migration` DESC", self.migration_table_name);
         let data = self.client.exec_map(&get_migration, (&migration_type,), |(migration, hash, file_name): (String, String, String)| {
             (migration, hash, file_name)
         });
-
         match data {
             Ok(data) => Ok(data),
             Err(e) => {
@@ -86,10 +75,7 @@ impl SqlEngine for Mysql {
 
     fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
         // Insert statement
-        let mut insert = String::from("INSERT INTO `");
-        insert.push_str(&self.migration_table_name);
-        insert.push_str("` (`migration`, `hash`, `type`, `file_name`, `created_at`) VALUES (?, ?, ?, ?, NOW());");
-
+        let insert = format!("INSERT INTO `{}` (`migration`, `hash`, `type`, `file_name`, `created_at`) VALUES (?, ?, ?, ?, NOW());", self.migration_table_name);
         match skip_transaction {
             true => {
                 // Executing migration
@@ -156,10 +142,7 @@ impl SqlEngine for Mysql {
 
     fn rollback(&mut self, _file: &PathBuf, version: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
         // Delete statement
-        let mut del = String::from("DELETE FROM `");
-        del.push_str(&self.migration_table_name);
-        del.push_str("` WHERE `migration` = ?;");
-
+        let del = format!("DELETE FROM `{}` WHERE migration` = ?;", self.migration_table_name);
         match skip_transaction {
             true => {
                 // Executing migration

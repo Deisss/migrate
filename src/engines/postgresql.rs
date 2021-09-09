@@ -140,9 +140,7 @@ impl Postgresql {
 
 impl SqlEngine for Postgresql {
     fn create_migration_table(&mut self) -> Result<u64, Box<dyn Error>> {
-        let mut create_table: String = String::from("CREATE TABLE IF NOT EXISTS \"");
-        create_table.push_str(&self.migration_table_name);
-        create_table.push_str("\" (\"migration\" TEXT PRIMARY KEY, \"hash\" TEXT, \"type\" TEXT, \"file_name\" TEXT, \"created_at\" TIMESTAMP)");
+        let create_table = format!("CREATE TABLE IF NOT EXISTS \"{}\" (\"migration\" TEXT PRIMARY KEY, \"hash\" TEXT, \"type\" TEXT, \"file_name\" TEXT, \"created_at\" TIMESTAMP)", self.migration_table_name);
         match self.client.execute(&create_table as &str, &[]) {
             Ok(i) => Ok(i),
             Err(e) => Err(Box::new(e))
@@ -150,10 +148,7 @@ impl SqlEngine for Postgresql {
     }
 
     fn get_migrations(&mut self) -> Result<Vec<String>, Box<dyn Error>> {
-        let mut get_migration = String::from("SELECT \"migration\" FROM \"");
-        get_migration.push_str(&self.migration_table_name);
-        get_migration.push_str("\" ORDER BY \"migration\" desc");
-
+        let get_migration = format!("SELECT \"migration\" FROM \"{}\" ORDER BY \"migration\" DESC", self.migration_table_name);
         match self.client.query(&get_migration as &str, &[]) {
             Ok(results) => Ok(results.iter().map(|row| row.get(0)).collect::<Vec<String>>()),
             Err(e) => {
@@ -165,9 +160,7 @@ impl SqlEngine for Postgresql {
     }
 
     fn get_migrations_with_hashes(&mut self, migration_type: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
-        let mut get_migration = String::from("SELECT \"migration\", \"hash\", \"file_name\" FROM \"");
-        get_migration.push_str(&self.migration_table_name);
-        get_migration.push_str("\" WHERE \"type\" = $1 ORDER BY \"migration\" desc");
+        let get_migration = format!("SELECT \"migration\", \"hash\", \"file_name\" FROM \"{}\" WHERE \"type\" = $1 ORDER BY \"migration\" DESC", self.migration_table_name);
         match self.client.query(&get_migration as &str, &[&migration_type]) {
             Ok(results) => Ok(results.iter().map(|row| (row.get(0), row.get(1), row.get(2))).collect::<Vec<(String, String, String)>>()),
             Err(e) => {
@@ -178,11 +171,7 @@ impl SqlEngine for Postgresql {
     }
 
     fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
-        // Insert statement
-        let mut insert = String::from("INSERT INTO \"");
-        insert.push_str(&self.migration_table_name);
-        insert.push_str("\" (\"migration\", \"hash\", \"type\", \"file_name\", \"created_at\") VALUES ($1, $2, $3, $4, NOW());");
-
+        let insert = format!("INSERT INTO \"{}\" (\"migration\", \"hash\", \"type\", \"file_name\", \"created_at\") VALUES ($1, $2, $3, $4, NOW());", self.migration_table_name);
         match skip_transaction {
             true => {
                 // Inserting migration
@@ -250,11 +239,7 @@ impl SqlEngine for Postgresql {
     }
 
     fn rollback(&mut self, _file: &PathBuf, version: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
-        // Delete statement
-        let mut del = String::from("DELETE FROM \"");
-        del.push_str(&self.migration_table_name);
-        del.push_str("\" WHERE \"migration\" = $1;");
-
+        let del = format!("DELETE FROM \"{}\" WHERE \"migration\" = $1;", self.migration_table_name);
         match skip_transaction {
             true => {
                 // Inserting migration
