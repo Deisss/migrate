@@ -69,12 +69,13 @@ fn create_folder(configuration: &Configuration, path: &str) -> bool {
     if configuration.debug == true {
         return true;
     }
-    let result = create_dir_all(path);
-    if result.is_err() {
-        crit!("Could not create migration folder: {}", result.err().unwrap());
-        return false;
+    match create_dir_all(path) {
+        Ok(_) => return true,
+        Err(e) => {
+            crit!("Could not create migration folder: {}", e);
+            return false;
+        }
     }
-    return true;
 }
 
 /// Write the migration file.
@@ -84,15 +85,14 @@ fn create_folder(configuration: &Configuration, path: &str) -> bool {
 /// * `filename` - The filename to write into.
 /// * `content` - The content to set.
 fn create_file(filename: &PathBuf, content: &str) {
-    let file = File::create(filename);
-    if file.is_err() {
-        crit!("Could not create file: {}", file.err().unwrap());
-    } else {
-        let mut file = file.ok().unwrap();
-        let res = write!(file, "{}", content);
-        if res.is_err() {
-            crit!("Could not write to file: {}", res.err().unwrap());
-        }
+    match File::create(filename) {
+        Ok(mut file) => {
+            match write!(file, "{}", content) {
+                Err(e) => crit!("Could not write to file: {}", e),
+                _ => {}
+            }
+        },
+        Err(e) => crit!("Could not create file: {}", e)
     }
 }
 
@@ -105,17 +105,19 @@ fn create_file(filename: &PathBuf, content: &str) {
 fn try_to_extract(regex: &str, content: &str) -> Result<(String, String), Box<dyn Error>> {
     let re = RegexBuilder::new(regex).case_insensitive(true).build()?;
     let data = re.captures(content);
-    if data.is_none() {
-        return Ok((String::new(), String::new()));
+
+    match data {
+        Some(data) => {
+            if let Some(table_name) = data.name("name") {
+                if let Some(column_name) = data.name("column") {
+                    return Ok((String::from(table_name.as_str()), String::from(column_name.as_str())));
+                }
+                return Ok((String::from(table_name.as_str()), String::new()));
+            }
+            Ok((String::new(), String::new()))
+        },
+        None => Ok((String::new(), String::new()))
     }
-    let data = data.unwrap();
-    if let Some(table_name) = data.name("name") {
-        if let Some(column_name) = data.name("column") {
-            return Ok((String::from(table_name.as_str()), String::from(column_name.as_str())));
-        }
-        return Ok((String::from(table_name.as_str()), String::new()));
-    }
-    Ok((String::new(), String::new()))
 }
 
 /// Get sample code for table creation.

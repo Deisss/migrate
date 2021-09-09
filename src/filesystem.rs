@@ -67,14 +67,13 @@ fn extract_useful_information_from_file_name(original: PathBuf) -> Option<File> 
         let mut it = original.iter().rev();
         // The file
         it.next();
-        // The folder
-        let res = it.next();
-        if res.is_none() {
-            return None;
-        }
+
         // Now we have the parent (that should contains the number/rest value
         // we are looking for)
-        file_stem = res.unwrap();
+        file_stem = match it.next() {
+            Some(s) => s,
+            None => return None
+        };
     }
 
     let mut file_stem: String = String::from(file_stem.to_str()?);
@@ -238,10 +237,14 @@ pub fn get_file_path_without_migration_path(migration_folder: &str, migration_fi
     let mut s = String::with_capacity(size.abs() as usize);
   
     for (i, c) in file.chars().enumerate() {
-        let t = folder_c.get(i);
-        if t.is_none() || t.unwrap() != &c {
-            s.push(c);
-        }
+        match folder_c.get(i) {
+            Some(t) => {
+                if t != &c {
+                    s.push(c);
+                }
+            }
+            None => s.push(c)
+        };
     }
     if s.starts_with("/") {
         return String::from(&s[1..]);

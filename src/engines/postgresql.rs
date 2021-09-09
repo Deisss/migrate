@@ -26,14 +26,16 @@ fn print_error_postgres(content: &str, error: postgres::error::Error) {
     // Move from postgres Error to DBError
     let source = error.into_source();
     let source: Option<&(dyn std::error::Error + 'static)> = source.as_ref().map(|e| &**e as _);
-    let downcast = source.and_then(|e| e.downcast_ref::<postgres::error::DbError>());
-    if downcast.is_none() {
-        crit!("");
-        crit!("SQL Error: {}", str_error);
-        crit!("");
-        return;
-    }
-    let downcast = downcast.unwrap();
+
+    let downcast = match source.and_then(|e| e.downcast_ref::<postgres::error::DbError>()) {
+        Some(d) => d,
+        None => {
+            crit!("");
+            crit!("SQL Error: {}", str_error);
+            crit!("");
+            return;
+        }
+    };
 
     // Extract position from that error
     let position = downcast.position();
@@ -86,41 +88,52 @@ pub struct Postgresql {
 impl Postgresql {
     /// Create PostgreSQL
     pub fn new(url: &str, migration_table_name: &str) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
-        let config = Config::from_str(url);
-        if config.is_err() {
-            let err = config.err().unwrap();
-            crit!("Could not create configuration for PostgreSQL: {}", err.to_string());
-            return Err(Box::new(err));
-        }
-        let config = config.unwrap();
+        let config = match Config::from_str(url) {
+            Ok(c) => c,
+            Err(e) => {
+                crit!("Could not create configuration for PostgreSQL: {}", e);
+                return Err(Box::new(e));
+            }
+
+        };
 
         // We start by trying to connect with NoTls activated
         // If it fails we try then to connect with TLS...
-        let mut connection = config.connect(NoTls);
-        if connection.is_err() {
-            let connector = TlsConnector::new();
-            if connector.is_err() {
-                let err = connector.err().unwrap();
-                crit!("Could not get TLS for PostgreSQL: {}", err.to_string());
-                return Err(Box::new(err));
-            }
-            let connector = MakeTlsConnector::new(connector.unwrap());
-            connection = config.connect(connector);
-            if connection.is_err() {
-                let err = connection.err().unwrap();
-                if err.to_string().starts_with("error parsing response from server") {
-                    crit!("Could not connect to PostgreSQL: check credentials");
-                } else {
-                    crit!("Could not connect to PostgreSQL: {}", err.to_string());
+        match config.connect(NoTls) {
+            Ok(connection) => {
+                Ok(Box::new(Postgresql {
+                    client: connection,
+                    migration_table_name: migration_table_name.to_owned(),
+                }))
+            },
+            Err(_e) => {
+                match TlsConnector::new() {
+                    Ok(connector) => {
+                        let connector = MakeTlsConnector::new(connector);
+                        match config.connect(connector) {
+                            Ok(connection) => {
+                                Ok(Box::new(Postgresql {
+                                    client: connection,
+                                    migration_table_name: migration_table_name.to_owned(),
+                                }))
+                            },
+                            Err(e) => {
+                                if e.to_string().starts_with("error parsing response from server") {
+                                    crit!("Could not connect to PostgreSQL: check credentials");
+                                } else {
+                                    crit!("Could not connect to PostgreSQL: {}", e);
+                                }
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        crit!("Could not get TLS for PostgreSQL: {}", e);
+                        Err(Box::new(e))
+                    }
                 }
-                return Err(Box::new(err));
             }
         }
-
-        Ok(Box::new(Postgresql {
-            client: connection.unwrap(),
-            migration_table_name: migration_table_name.to_owned(),
-        }))
     }
 }
 
@@ -136,37 +149,31 @@ impl SqlEngine for Postgresql {
     }
 
     fn get_migrations(&mut self) -> Result<Vec<String>, Box<dyn Error>> {
-        let mut results: Vec<String> = Vec::new();
         let mut get_migration = String::from("SELECT \"migration\" FROM \"");
         get_migration.push_str(&self.migration_table_name);
         get_migration.push_str("\" ORDER BY \"migration\" desc");
-        let data = self.client.query(&get_migration as &str, &[]);
-        if data.is_err() {
-            let err = data.err().unwrap();
-            crit!("Error getting migration: {}", err.to_string());
-            return Err(Box::new(err));
+
+        match self.client.query(&get_migration as &str, &[]) {
+            Ok(results) => Ok(results.iter().map(|row| row.get(0)).collect::<Vec<String>>()),
+            Err(e) => {
+                crit!("Error getting migration: {}", e);
+                Err(Box::new(e))
+            }
         }
-        for row in data.unwrap() {
-            results.push(row.get(0));
-        }
-        Ok(results)
+
     }
 
     fn get_migrations_with_hashes(&mut self, migration_type: &str) -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
-        let mut results: Vec<(String, String, String)> = Vec::new();
         let mut get_migration = String::from("SELECT \"migration\", \"hash\", \"file_name\" FROM \"");
         get_migration.push_str(&self.migration_table_name);
         get_migration.push_str("\" WHERE \"type\" = $1 ORDER BY \"migration\" desc");
-        let data = self.client.query(&get_migration as &str, &[&migration_type]);
-        if data.is_err() {
-            let err = data.err().unwrap();
-            crit!("Error getting migration: {}", err.to_string());
-            return Err(Box::new(err));
+        match self.client.query(&get_migration as &str, &[&migration_type]) {
+            Ok(results) => Ok(results.iter().map(|row| (row.get(0), row.get(1), row.get(2))).collect::<Vec<(String, String, String)>>()),
+            Err(e) => {
+                crit!("Error getting migration: {}", e);
+                Err(Box::new(e))
+            }
         }
-        for row in data.unwrap() {
-            results.push((row.get(0), row.get(1), row.get(2)));
-        }
-        Ok(results)
     }
 
     fn migrate(&mut self, file: &PathBuf, version: &str, migration_type: &str, migration: &str, skip_transaction: bool) -> Result<(), Box<dyn Error>> {
@@ -243,57 +250,57 @@ impl SqlEngine for Postgresql {
         del.push_str(&self.migration_table_name);
         del.push_str("\" WHERE \"migration\" = $1;");
 
-        if skip_transaction {
-            // Inserting migration
-            match self.client.batch_execute(migration) {
-                Ok(_) => {},
-                Err(e) => {
-                    print_error_postgres(migration, e);
-                    return Err(Box::new(EngineError {}));
+        match skip_transaction {
+            true => {
+                // Inserting migration
+                match self.client.batch_execute(migration) {
+                    Ok(_) => {
+                        // Store in migration table and commit
+                        match self.client.query(&del as &str, &[&version]) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                crit!("Could store result in migration table: {}", e.to_string());
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        print_error_postgres(migration, e);
+                        Err(Box::new(EngineError {}))
+                    }
                 }
-            };
+            },
+            false => {
+                let mut trx = match self.client.transaction() {
+                    Ok(t) => t,
+                    Err(e) => {
+                        crit!("Could not create a transaction: {}", e);
+                        return Err(Box::new(e));
+                    }
+                };
 
-            // Store in migration table and commit
-            match self.client.query(&del as &str, &[&version]) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            }
+                match trx.batch_execute(migration) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        print_error_postgres(migration, e);
+                        return Err(Box::new(EngineError {}));
+                    }
+                };
 
-        } else {
-            // Do the transaction
-            let trx = self.client.transaction();
-            if trx.is_err() {
-                let err = trx.err().unwrap();
-                crit!("Could not create a transaction: {}", err.to_string());
-                return Err(Box::new(err));
-            }
-
-            // Executing migration
-            let mut trx = trx.unwrap();
-            match trx.batch_execute(migration) {
-                Ok(_) => {},
-                Err(e) => {
-                    print_error_postgres(migration, e);
-                    return Err(Box::new(EngineError {}));
-                }
-            };
-
-            // Store in migration table and commit
-            match trx.query(&del as &str, &[&version]) {
-                Ok(_) => {},
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            };
-            match trx.commit() {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Failed to commit transaction: {}", e.to_string());
-                    Err(Box::new(e))
+                // Store in migration table and commit
+                match trx.query(&del as &str, &[&version]) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        crit!("Could store result in migration table: {}", e.to_string());
+                        return Err(Box::new(e));
+                    }
+                };
+                match trx.commit() {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        crit!("Failed to commit transaction: {}", e.to_string());
+                        Err(Box::new(e))
+                    }
                 }
             }
         }

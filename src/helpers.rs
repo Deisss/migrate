@@ -45,25 +45,6 @@ pub fn readable_time(time_ms: u128) -> String {
     result
 }
 
-/*
-/// Transform a number into a date if possible...
-///
-/// # Arguments
-///
-/// * `number` - The number to transform.
-pub fn auto_number_to_date(number: u64) -> String {
-    let s = number.to_string();
-
-    // Then it's quite probably a date...
-    if s.len() == 14 {
-        return format!("{}/{}/{} {}:{}:{}", &s[..4], &s[4..6], &s[6..8], &s[8..10], &s[10..12], &s[12..])
-    }
-
-    // Any other cases...
-    s
-}
-*/
-
 /// Split a content line by line - without removing delimiter.
 ///
 /// # Arguments

@@ -12,17 +12,18 @@ pub struct Sqlite {
 impl Sqlite {
     /// Create SQLite
     pub fn new(url: &str, migration_table_name: &str) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
-        let connection = Connection::open(url);
-        if connection.is_err() {
-            let err = connection.err().unwrap();
-            crit!("Could not open database for SqLite: {}", err.to_string());
-            return Err(Box::new(err));
+        match Connection::open(url) {
+            Ok(connection) => {
+                Ok(Box::new(Sqlite {
+                    client: connection,
+                    migration_table_name: migration_table_name.to_owned(),
+                }))
+            },
+            Err(e) => {
+                crit!("Could not open database for SqLite: {}", e);
+                return Err(Box::new(e));
+            }
         }
-        let connection = connection.unwrap();
-        Ok(Box::new(Sqlite {
-            client: connection,
-            migration_table_name: migration_table_name.to_owned(),
-        }))
     }
 }
 
@@ -43,6 +44,7 @@ impl SqlEngine for Sqlite {
         get_migration.push_str(&self.migration_table_name);
         get_migration.push_str("\" ORDER BY \"migration\" desc");
         let mut stmt = self.client.prepare(&get_migration as &str)?;
+
         stmt.query_map(NO_PARAMS, |row| {
             let tmp = row.get(0);
             if tmp.is_ok() {
