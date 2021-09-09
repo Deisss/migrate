@@ -1,4 +1,4 @@
-use rusqlite::{Connection, NO_PARAMS};
+use rusqlite::Connection;
 use super::{SqlEngine, EngineError};
 use std::error::Error;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ impl Sqlite {
 impl SqlEngine for Sqlite {
     fn create_migration_table(&mut self) -> Result<u64, Box<dyn Error>> {
         let create_table = format!("CREATE TABLE IF NOT EXISTS \"{}\" (\"migration\" TEXT PRIMARY KEY, \"hash\" TEXT, \"type\" TEXT, \"file_name\" TEXT, \"created_at\" TIMESTAMP)", self.migration_table_name);
-        match self.client.execute(&create_table as &str, NO_PARAMS) {
+        match self.client.execute(&create_table as &str, []) {
             Ok(_) => Ok(0),
             Err(e) => Err(Box::new(e))
         }
@@ -40,7 +40,7 @@ impl SqlEngine for Sqlite {
         let get_migration = format!("SELECT \"migration\" FROM \"{}\" ORDER BY \"migration\" DESC", self.migration_table_name);
         let mut stmt = self.client.prepare(&get_migration as &str)?;
         let mut results: Vec<String> = Vec::new();
-        stmt.query_map(NO_PARAMS, |row| {
+        stmt.query_map([], |row| {
             let tmp = row.get(0);
             if tmp.is_ok() {
                 results.push(tmp.unwrap());
@@ -71,7 +71,7 @@ impl SqlEngine for Sqlite {
         match skip_transaction {
             true => {
                 // Do the transaction
-                match self.client.execute(migration, NO_PARAMS) {
+                match self.client.execute(migration, []) {
                     Ok(_) => {
                         let hash = format!("{:x}", md5::compute(&migration));
                         let file_name = format!("{}", &file.display());
@@ -96,7 +96,7 @@ impl SqlEngine for Sqlite {
                 match self.client.transaction() {
                     Ok(trx) => {
                         // Doing SQL
-                        match trx.execute(migration, NO_PARAMS) {
+                        match trx.execute(migration, []) {
                             Ok(_) => {
                                 let hash = format!("{:x}", md5::compute(&migration));
                                 let file_name = format!("{}", &file.display());
@@ -139,7 +139,7 @@ impl SqlEngine for Sqlite {
         match skip_transaction {
             true => {
                 // Do the transaction
-                match self.client.execute(migration, NO_PARAMS) {
+                match self.client.execute(migration, []) {
                     Ok(_) => {
                         // Store in migration table
                         match self.client.execute(&del as &str, &[&version]) {
@@ -162,7 +162,7 @@ impl SqlEngine for Sqlite {
                 match self.client.transaction() {
                     Ok(trx) => {
                         // Doing the migration
-                        match trx.execute(migration, NO_PARAMS) {
+                        match trx.execute(migration, []) {
                             Ok(_) => {
                                 // Store in migration table and commit
                                 match trx.execute(&del as &str, &[&version]) {
