@@ -239,13 +239,13 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
 
     // Url override everything
     if configuration.url.len() > 0 {
-        if configuration.url.starts_with("mysql") == true {
-            configuration.engine = EngineName::MYSQL;
+        configuration.engine = if configuration.url.starts_with("mysql") == true {
+            EngineName::MYSQL
         } else if configuration.url.starts_with("postgres") == true || configuration.url.contains("host=") == true {
-            configuration.engine = EngineName::POSTGRESQL;
+            EngineName::POSTGRESQL
         } else {
-            configuration.engine = EngineName::SQLITE;
-        }
+            EngineName::SQLITE
+        };
     }
 
     configuration
@@ -488,43 +488,34 @@ fn main() {
         .subcommand(status)
         .get_matches();
 
-    let mut configuration: Configuration = Default::default();
-
     // Selecting the right sub-command to run
-    match matches.subcommand() {
-        ("create", Some(create_matches)) => {
-            configuration = extract_parameters("create", &create_matches);
-        },
-        ("up", Some(up_matches)) => {
-            configuration = extract_parameters("up", &up_matches);
-        }
-        ("down", Some(down_matches)) => {
-            configuration = extract_parameters("down", &down_matches);
-        }
-        ("status", Some(status_matches)) => {
-            configuration = extract_parameters("status", &status_matches);
-        }
+    let configuration: Configuration = match matches.subcommand() {
+        ("create", Some(create_matches)) => extract_parameters("create", &create_matches),
+        ("up", Some(up_matches)) => extract_parameters("up", &up_matches),
+        ("down", Some(down_matches)) => extract_parameters("down", &down_matches),
+        ("status", Some(status_matches)) => extract_parameters("status", &status_matches),
         ("", interactive_options) | ("interactive", interactive_options) => {
-            if interactive_options.is_some() {
-                configuration = extract_parameters("interactive", &interactive_options.unwrap());
-            } else {
+            match interactive_options {
+                Some(options) => extract_parameters("interactive", &options),
+                None => {
+                    // We generate some fake pre-defined command args
+                    let custom_matches = App::new("Migration")
+                        .subcommand(custom_interactive)
+                        .get_matches_from_safe_borrow(vec!["migrate", "interactive", "-c", "migration"]);
 
-                // We generate some fake pre-defined command args
-                let custom_matches = App::new("Migration")
-                    .subcommand(custom_interactive)
-                    .get_matches_from_safe_borrow(vec!["migrate", "interactive", "-c", "migration"]);
-
-                match custom_matches.unwrap_or_default().subcommand() {
-                    ("interactive", Some(interactive_matches)) => {
-                        configuration = extract_parameters("interactive", &interactive_matches);
-                    },
-                    ("", None) => info!("Use --help to get started with"),
-                    _ => unreachable!(), // If all sub-commands are defined above, anything else is unreachable!()
+                    match custom_matches.unwrap_or_default().subcommand() {
+                        ("interactive", Some(interactive_matches)) => extract_parameters("interactive", &interactive_matches),
+                        ("", None) => {
+                            info!("Use --help to get started with");
+                            Default::default()
+                        },
+                        _ => unreachable!(),
+                    }
                 }
             }
         },
         _ => unreachable!(), // If all sub-commands are defined above, anything else is unreachable!()
-    }
+    };
 
     // Starting the application
     let result = apply_command(&configuration);
