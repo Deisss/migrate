@@ -27,56 +27,57 @@ fn print_error_postgres(content: &str, error: postgres::error::Error) {
     let source = error.into_source();
     let source: Option<&(dyn std::error::Error + 'static)> = source.as_ref().map(|e| &**e as _);
 
-    let downcast = match source.and_then(|e| e.downcast_ref::<postgres::error::DbError>()) {
-        Some(d) => d,
+    match source.and_then(|e| e.downcast_ref::<postgres::error::DbError>()) {
+        Some(downcast) => {
+            match downcast.position() {
+                Some(position) => {
+                    let position = format!("{:?}", position).replace("Original(", "").replace(")", "");
+                    match position.parse::<u32>() {
+                        Ok(position) => {
+                            match get_relevant_line(content, position) {
+                                Some(result) => {
+                                    let trimmed = result.2.trim();
+                                    let spaces: u32 = position - result.0 - 1;
+                                    let spaces_trimmed: usize = spaces as usize - (result.2.len() - trimmed.len());
+
+                                    // Printing the error
+                                    crit!("");
+                                    crit!("{} line {} column {}:", downcast.severity(), result.1, spaces);
+                                    crit!("");
+                                    crit!("{}", trimmed);
+                                    let debug = format!("{}^ {}: {}", std::iter::repeat(" ").take(spaces_trimmed).collect::<String>(),
+                                                         downcast.code().code(),
+                                                         downcast.message());
+                                    crit!("{}", debug);
+                                    crit!("");
+                                },
+                                None => {
+                                    crit!("");
+                                    crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
+                                    crit!("");
+                                }
+                            };
+                        },
+                        Err(_e) => {
+                            crit!("");
+                            crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
+                            crit!("");
+                        }
+                    };
+                },
+                None => {
+                    crit!("");
+                    crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
+                    crit!("");
+                }
+            };
+        },
         None => {
             crit!("");
             crit!("SQL Error: {}", str_error);
             crit!("");
-            return;
         }
     };
-
-    // Extract position from that error
-    let position = downcast.position();
-    if position.is_none() {
-        crit!("");
-        crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
-        crit!("");
-        return;
-    }
-    let position = format!("{:?}", downcast.position().unwrap())
-        .replace("Original(", "").replace(")", "");
-    let position = position.parse::<u32>();
-    if position.is_err() {
-        crit!("");
-        crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
-        crit!("");
-        return;
-    }
-    let position = position.unwrap();
-    let result = get_relevant_line(content, position);
-    if result.is_none() {
-        crit!("");
-        crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
-        crit!("");
-        return;
-    }
-    let result = result.unwrap();
-    let trimmed = result.2.trim();
-    let spaces: u32 = position - result.0 - 1;
-    let spaces_trimmed: usize = spaces as usize - (result.2.len() - trimmed.len());
-
-    // Printing the error
-    crit!("");
-    crit!("{} line {} column {}:", downcast.severity(), result.1, spaces);
-    crit!("");
-    crit!("{}", trimmed);
-    let debug = format!("{}^ {}: {}", std::iter::repeat(" ").take(spaces_trimmed).collect::<String>(),
-                         downcast.code().code(),
-                         downcast.message());
-    crit!("{}", debug);
-    crit!("");
 }
 
 
@@ -182,63 +183,67 @@ impl SqlEngine for Postgresql {
         insert.push_str(&self.migration_table_name);
         insert.push_str("\" (\"migration\", \"hash\", \"type\", \"file_name\", \"created_at\") VALUES ($1, $2, $3, $4, NOW());");
 
-        if skip_transaction {
-            // Inserting migration
-            match self.client.batch_execute(migration) {
-                Ok(_) => {},
-                Err(e) => {
-                    print_error_postgres(migration, e);
-                    return Err(Box::new(EngineError {}));
+        match skip_transaction {
+            true => {
+                // Inserting migration
+                match self.client.batch_execute(migration) {
+                    Ok(_) => {
+                        let hash = format!("{:x}", md5::compute(&migration));
+                        let file_name = format!("{}", &file.display());
+
+                        // Store in migration table and commit
+                        match self.client.query(&insert as &str, &[&version, &hash, &migration_type, &file_name]) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                crit!("Could store result in migration table: {}", e);
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        print_error_postgres(migration, e);
+                        Err(Box::new(EngineError {}))
+                    }
                 }
-            };
+            },
+            false => {
+                // Do the transaction
+                match self.client.transaction() {
+                    Ok(mut trx) => {
+                        // Executing migration
+                        match trx.batch_execute(migration) {
+                            Ok(_) => {
+                                let hash = format!("{:x}", md5::compute(&migration));
+                                let file_name = format!("{}", &file.display());
 
-            let hash = format!("{:x}", md5::compute(&migration));
-            let file_name = format!("{}", &file.display());
-
-            // Store in migration table and commit
-            match self.client.query(&insert as &str, &[&version, &hash, &migration_type, &file_name]) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            }
-
-        } else {
-            // Do the transaction
-            let trx = self.client.transaction();
-            if trx.is_err() {
-                let err = trx.err().unwrap();
-                crit!("Could not create a transaction: {}", err.to_string());
-                return Err(Box::new(err));
-            }
-
-            // Executing migration
-            let mut trx = trx.unwrap();
-            match trx.batch_execute(migration) {
-                Ok(_) => {},
-                Err(e) => {
-                    print_error_postgres(migration, e);
-                    return Err(Box::new(EngineError {}));
-                }
-            };
-
-            let hash = format!("{:x}", md5::compute(&migration));
-            let file_name = format!("{}", &file.display());
-
-            // Store in migration table and commit
-            match trx.query(&insert as &str, &[&version, &hash, &migration_type, &file_name]) {
-                Ok(_) => {},
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            };
-            match trx.commit() {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Failed to commit transaction: {}", e.to_string());
-                    Err(Box::new(e))
+                                // Store in migration table and commit
+                                match trx.query(&insert as &str, &[&version, &hash, &migration_type, &file_name]) {
+                                    Ok(_) => {
+                                        // Committing results
+                                        match trx.commit() {
+                                            Ok(_) => Ok(()),
+                                            Err(e) => {
+                                                crit!("Failed to commit transaction: {}", e);
+                                                Err(Box::new(e))
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        crit!("Could store result in migration table: {}", e);
+                                        Err(Box::new(e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                print_error_postgres(migration, e);
+                                Err(Box::new(EngineError {}))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        crit!("Could not create a transaction: {}", e);
+                        Err(Box::new(e))
+                    }
                 }
             }
         }
@@ -259,7 +264,7 @@ impl SqlEngine for Postgresql {
                         match self.client.query(&del as &str, &[&version]) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e.to_string());
+                                crit!("Could store result in migration table: {}", e);
                                 Err(Box::new(e))
                             }
                         }
@@ -271,37 +276,42 @@ impl SqlEngine for Postgresql {
                 }
             },
             false => {
-                let mut trx = match self.client.transaction() {
-                    Ok(t) => t,
+                match self.client.transaction() {
+                    Ok(mut trx) => {
+                        // Execute SQL
+                        match trx.batch_execute(migration) {
+                            Ok(_) => {
+                                // Store in migration table and commit
+                                match trx.query(&del as &str, &[&version]) {
+                                    Ok(_) => {
+                                        // Committing result
+                                        match trx.commit() {
+                                            Ok(_) => Ok(()),
+                                            Err(e) => {
+                                                crit!("Failed to commit transaction: {}", e);
+                                                Err(Box::new(e))
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        crit!("Could store result in migration table: {}", e);
+                                        Err(Box::new(e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                print_error_postgres(migration, e);
+                                Err(Box::new(EngineError {}))
+                            }
+                        }
+                    },
                     Err(e) => {
                         crit!("Could not create a transaction: {}", e);
-                        return Err(Box::new(e));
-                    }
-                };
-
-                match trx.batch_execute(migration) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        print_error_postgres(migration, e);
-                        return Err(Box::new(EngineError {}));
-                    }
-                };
-
-                // Store in migration table and commit
-                match trx.query(&del as &str, &[&version]) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        crit!("Could store result in migration table: {}", e.to_string());
-                        return Err(Box::new(e));
-                    }
-                };
-                match trx.commit() {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        crit!("Failed to commit transaction: {}", e.to_string());
                         Err(Box::new(e))
                     }
                 }
+
+
             }
         }
     }

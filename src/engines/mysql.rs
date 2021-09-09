@@ -94,58 +94,59 @@ impl SqlEngine for Mysql {
             true => {
                 // Executing migration
                 match self.client.query_drop(migration) {
-                    Ok(_) => {},
+                    Ok(_) => {
+                        let hash = format!("{:x}", md5::compute(&migration));
+                        let file_name = format!("{}", &file.display());
+
+                        // Store in migration table and commit
+                        match self.client.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                crit!("Could store result in migration table: {}", e.to_string());
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
                     Err(e) => {
                         crit!("{}", e);
-                        return Err(Box::new(EngineError {}));
-                    }
-                };
-
-                let hash = format!("{:x}", md5::compute(&migration));
-                let file_name = format!("{}", &file.display());
-
-                // Store in migration table and commit
-                match self.client.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        crit!("Could store result in migration table: {}", e.to_string());
-                        return Err(Box::new(e));
+                        Err(Box::new(EngineError {}))
                     }
                 }
             },
             false => {
                 // Do the transaction
-                let mut trx = match self.client.start_transaction(TxOpts::default()) {
-                    Ok(t) => t,
+                match self.client.start_transaction(TxOpts::default()) {
+                    Ok(mut trx) => {
+                        match trx.query_drop(migration) {
+                            Ok(_) => {
+                                let hash = format!("{:x}", md5::compute(&migration));
+                                let file_name = format!("{}", &file.display());
+
+                                // Store in migration table and commit
+                                match trx.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
+                                    Ok(_) => {
+                                        match trx.commit() {
+                                            Ok(_) => Ok(()),
+                                            Err(e) => {
+                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                Err(Box::new(e))
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        crit!("Could store result in migration table: {}", e.to_string());
+                                        Err(Box::new(e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                crit!("{}", e);
+                                Err(Box::new(EngineError {}))
+                            }
+                        }
+                    },
                     Err(e) => {
                         crit!("Could not create a transaction: {}", e);
-                        return Err(Box::new(e));
-                    }
-                };
-
-                match trx.query_drop(migration) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        crit!("{}", e);
-                        return Err(Box::new(EngineError {}));
-                    }
-                };
-
-                let hash = format!("{:x}", md5::compute(&migration));
-                let file_name = format!("{}", &file.display());
-
-                // Store in migration table and commit
-                match trx.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        crit!("Could store result in migration table: {}", e.to_string());
-                        return Err(Box::new(e));
-                    }
-                };
-                match trx.commit() {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        crit!("Failed to commit transaction: {}", e.to_string());
                         Err(Box::new(e))
                     }
                 }
@@ -163,52 +164,54 @@ impl SqlEngine for Mysql {
             true => {
                 // Executing migration
                 match self.client.query_drop(migration) {
-                    Ok(_) => {},
+                    Ok(_) => {
+                        // Store in migration table and commit
+                        match self.client.exec_drop(&del as &str, (&version,)) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                crit!("Could store result in migration table: {}", e.to_string());
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
                     Err(e) => {
                         crit!("{}", e);
-                        return Err(Box::new(EngineError {}));
-                    }
-                };
-
-                // Store in migration table and commit
-                match self.client.exec_drop(&del as &str, (&version,)) {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        crit!("Could store result in migration table: {}", e.to_string());
-                        return Err(Box::new(e));
+                        Err(Box::new(EngineError {}))
                     }
                 }
             },
             false => {
                 // Do the transaction
-                let mut trx = match self.client.start_transaction(TxOpts::default()) {
-                    Ok(t) => t,
+                match self.client.start_transaction(TxOpts::default()) {
+                    Ok(mut trx) => {
+                        match trx.query_drop(migration) {
+                            Ok(_) => {
+                                // Store in migration table and commit
+                                match trx.exec_drop(&del as &str, (&version,)) {
+                                    Ok(_) => {
+                                        // Committing transaction
+                                        match trx.commit() {
+                                            Ok(_) => Ok(()),
+                                            Err(e) => {
+                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                Err(Box::new(e))
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        crit!("Could store result in migration table: {}", e.to_string());
+                                        Err(Box::new(e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                crit!("{}", e);
+                                Err(Box::new(EngineError {}))
+                            }
+                        }
+                    },
                     Err(e) => {
                         crit!("Could not create a transaction: {}", e);
-                        return Err(Box::new(e));
-                    }
-                };
-
-                match trx.query_drop(migration) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        crit!("{}", e);
-                        return Err(Box::new(EngineError {}));
-                    }
-                };
-
-                // Store in migration table and commit
-                match trx.exec_drop(&del as &str, (&version,)) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        crit!("Could store result in migration table: {}", e.to_string());
-                        return Err(Box::new(e));
-                    }
-                };
-                match trx.commit() {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        crit!("Failed to commit transaction: {}", e.to_string());
                         Err(Box::new(e))
                     }
                 }

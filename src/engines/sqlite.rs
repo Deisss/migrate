@@ -21,7 +21,7 @@ impl Sqlite {
             },
             Err(e) => {
                 crit!("Could not open database for SqLite: {}", e);
-                return Err(Box::new(e));
+                Err(Box::new(e))
             }
         }
     }
@@ -79,62 +79,67 @@ impl SqlEngine for Sqlite {
         insert.push_str(&self.migration_table_name);
         insert.push_str("\" (\"migration\", \"hash\", \"type\", \"file_name\", \"created_at\") VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP);");
 
-        if skip_transaction {
-            // Do the transaction
-            match self.client.execute(migration, NO_PARAMS) {
-                Ok(_) => {},
-                Err(e) => {
-                    println!("{:?}", e);
-                    return Err(Box::new(EngineError {}));
+        match skip_transaction {
+            true => {
+                // Do the transaction
+                match self.client.execute(migration, NO_PARAMS) {
+                    Ok(_) => {
+                        let hash = format!("{:x}", md5::compute(&migration));
+                        let file_name = format!("{}", &file.display());
+
+                        // Store in migration table and commit
+                        match self.client.execute(&insert as &str, &[&version, &hash[..], &migration_type, &file_name]) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                crit!("Could store result in migration table: {}", e.to_string());
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        println!("{:?}", e);
+                        Err(Box::new(EngineError {}))
+                    }
                 }
-            };
+            },
+            false => {
+                // Starting transaction
+                match self.client.transaction() {
+                    Ok(trx) => {
+                        // Doing SQL
+                        match trx.execute(migration, NO_PARAMS) {
+                            Ok(_) => {
+                                let hash = format!("{:x}", md5::compute(&migration));
+                                let file_name = format!("{}", &file.display());
 
-            let hash = format!("{:x}", md5::compute(&migration));
-            let file_name = format!("{}", &file.display());
-
-            // Store in migration table and commit
-            match self.client.execute(&insert as &str, &[&version, &hash[..], &migration_type, &file_name]) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            }
-
-        } else {
-            // Do the transaction
-            let trx = self.client.transaction();
-            if trx.is_err() {
-                let err = trx.err().unwrap();
-                crit!("Could not create a transaction: {}", err.to_string());
-                return Err(Box::new(err));
-            }
-
-            let trx = trx.unwrap();
-            match trx.execute(migration, NO_PARAMS) {
-                Ok(_) => {},
-                Err(e) => {
-                    println!("{:?}", e);
-                    return Err(Box::new(EngineError {}));
-                }
-            };
-
-            let hash = format!("{:x}", md5::compute(&migration));
-            let file_name = format!("{}", &file.display());
-
-            // Store in migration table and commit
-            match trx.execute(&insert as &str, &[&version, &hash[..], &migration_type, &file_name]) {
-                Ok(_) => {},
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            };
-            match trx.commit() {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Failed to commit transaction: {}", e.to_string());
-                    Err(Box::new(e))
+                                // Store in migration table and commit
+                                match trx.execute(&insert as &str, &[&version, &hash[..], &migration_type, &file_name]) {
+                                    Ok(_) => {
+                                        // Committing transaction
+                                        match trx.commit() {
+                                            Ok(_) => Ok(()),
+                                            Err(e) => {
+                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                Err(Box::new(e))
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        crit!("Could store result in migration table: {}", e);
+                                        Err(Box::new(e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                println!("{:?}", e);
+                                Err(Box::new(EngineError {}))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        crit!("Could not create a transaction: {}", e);
+                        Err(Box::new(e))
+                    }
                 }
             }
         }
@@ -146,56 +151,62 @@ impl SqlEngine for Sqlite {
         del.push_str(&self.migration_table_name);
         del.push_str("\" WHERE \"migration\" = $1;");
 
-        if skip_transaction {
-            // Do the transaction
-            match self.client.execute(migration, NO_PARAMS) {
-                Ok(_) => {},
-                Err(e) => {
-                    println!("{:?}", e);
-                    return Err(Box::new(EngineError {}));
+        match skip_transaction {
+            true => {
+                // Do the transaction
+                match self.client.execute(migration, NO_PARAMS) {
+                    Ok(_) => {
+                        // Store in migration table
+                        match self.client.execute(&del as &str, &[&version]) {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                crit!("Could store result in migration table: {}", e.to_string());
+                                Err(Box::new(e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        println!("{:?}", e);
+                        Err(Box::new(EngineError {}))
+                    }
                 }
-            };
 
-            // Store in migration table and commit
-            match self.client.execute(&del as &str, &[&version]) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            }
-
-        } else {
-            // Do the transaction
-            let trx = self.client.transaction();
-            if trx.is_err() {
-                let err = trx.err().unwrap();
-                crit!("Could not create a transaction: {}", err.to_string());
-                return Err(Box::new(err));
-            }
-
-            let trx = trx.unwrap();
-            match trx.execute(migration, NO_PARAMS) {
-                Ok(_) => {},
-                Err(e) => {
-                    println!("{:?}", e);
-                    return Err(Box::new(EngineError {}));
-                }
-            };
-
-            // Store in migration table and commit
-            match trx.execute(&del as &str, &[&version]) {
-                Ok(_) => {},
-                Err(e) => {
-                    crit!("Could store result in migration table: {}", e.to_string());
-                    return Err(Box::new(e));
-                }
-            };
-            match trx.commit() {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    crit!("Failed to commit transaction: {}", e.to_string());
-                    Err(Box::new(e))
+            },
+            false => {
+                // Do the transaction
+                match self.client.transaction() {
+                    Ok(trx) => {
+                        // Doing the migration
+                        match trx.execute(migration, NO_PARAMS) {
+                            Ok(_) => {
+                                // Store in migration table and commit
+                                match trx.execute(&del as &str, &[&version]) {
+                                    Ok(_) => {
+                                        // Committing results
+                                        match trx.commit() {
+                                            Ok(_) => Ok(()),
+                                            Err(e) => {
+                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                Err(Box::new(e))
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        crit!("Could store result in migration table: {}", e.to_string());
+                                        Err(Box::new(e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                println!("{:?}", e);
+                                Err(Box::new(EngineError {}))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        crit!("Could not create a transaction: {}", e);
+                        Err(Box::new(e))
+                    }
                 }
             }
         }
