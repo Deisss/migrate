@@ -115,27 +115,28 @@ pub fn limit_per_date(migration_number: &str, days: u32) -> bool {
 ///
 /// * `number` - The number to fit.
 pub fn limit_number(number: &str) -> String {
-    if number.len() > 16 {
+    if number.len() == 16 {
+        number.to_string()
+    } else if number.len() > 16 {
         // 13 because we count the "..."
         let space = number.len() - 13;
         let mut s = String::from("...");
         s.push_str(&number[space..]);
-        return s;
-    } else if number.len() == 16 {
-        return number.to_string();
-    }
+        s
+    } else {
+        let mut s = String::from(number);
 
-    let mut s = String::from(number);
-
-    while s.len() < 16 {
-        if s.len() % 2 == 0 {
-            s.push(' ');
-        } else {
-            s.insert(0, ' ');
+        while s.len() < 16 {
+            if s.len() % 2 == 0 {
+                s.push(' ');
+            } else {
+                s.insert(0, ' ');
+            }
         }
+
+        s
     }
 
-    s
 }
 
 /// Fit a number into the given size allowed (16 chars).
