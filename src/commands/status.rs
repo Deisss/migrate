@@ -1,7 +1,7 @@
 use crate::filesystem::{self, File, get_file_path_without_migration_path};
 use crate::Configuration;
 use crate::EngineName;
-use crate::engines::get_sql_engine;
+use crate::engines::{get_sql_engine, EngineError};
 use crate::commands::interactive::{merge_migrations_and_files, InteractiveMigration, InteractionType};
 use crate::helpers::{limit_number, limit_per_date};
 use console::Style;
@@ -69,35 +69,39 @@ fn show_status(root: &str, migrations: &mut Vec<InteractiveMigration>) {
 /// * `configuration` - The system configuration.
 /// * `files` - The files.
 fn process_status_sql(configuration: &Configuration, files: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
-    let db = get_sql_engine(&configuration.engine, configuration);
-    if db.is_err() {
-        crit!("Error getting engine: {:?}", db.as_ref().err());
-    }
-    let mut db = db.unwrap();
+    match get_sql_engine(&configuration.engine, configuration) {
+        Ok(mut db) => {
+            match db.create_migration_table() {
+                Ok(_) => {
+                    match db.get_migrations_with_hashes(&configuration.migration_type) {
+                        Ok(mut existing) => {
+                            if configuration.interactive_days > 0 {
+                                existing.retain(|(migration, _, _)| limit_per_date(migration, configuration.interactive_days));
+                                files.retain(|file| limit_per_date(&file.number.to_string(), configuration.interactive_days));
+                            }
 
-    match db.create_migration_table() {
-        Err(e) => {
-            crit!("Error creating migration table: {:?}", e);
+                            let mut to_show = merge_migrations_and_files(&existing, files);
+                            show_status(&configuration.path, &mut to_show);
+
+                            Ok(())
+                        },
+                        Err(e) => {
+                            crit!("Error getting migrations: {:?}", e);
+                            Err(Box::new(EngineError {}))
+                        }
+                    }
+                },
+                Err(e) => {
+                    crit!("Error creating migration table: {:?}", e);
+                    Err(Box::new(EngineError {}))
+                }
+            }
         },
-        _ => {}
-    };
-
-    let existing = db.get_migrations_with_hashes(&configuration.migration_type);
-    if existing.is_err() {
-        crit!("Error getting migrations: {:?}", existing.as_ref().err());
+        Err(e) => {
+            crit!("Error getting engine: {:?}", e);
+            Err(Box::new(EngineError {}))
+        }
     }
-    let mut existing = existing.unwrap();
-
-    // Filtering files & existing if needed
-    if configuration.interactive_days > 0 {
-        existing.retain(|(migration, _, _)| limit_per_date(migration, configuration.interactive_days));
-        files.retain(|file| limit_per_date(&file.number.to_string(), configuration.interactive_days));
-    }
-
-    let mut to_show = merge_migrations_and_files(&existing, files);
-    show_status(&configuration.path, &mut to_show);
-
-    Ok(())
 }
 
 /// Dump the status of the database.
