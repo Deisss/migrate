@@ -436,11 +436,7 @@ fn show_recap_menu(root: &str, migrations: &Vec<InteractiveMigration>) -> bool {
     s = s.trim().to_string();
 
     // Extracting migration
-    if !res.is_err() && (s == "Y" || s == "y" || s == "") {
-        return true;
-    }
-
-    false
+    !res.is_err() && (s == "Y" || s == "y" || s == "")
 }
 
 /// Do the interactive mode.

@@ -19,6 +19,19 @@ struct CurrentTime {
     second: String
 }
 
+macro_rules! trim_underscore {
+    ($input:ident) => {
+        {
+            let mut s = String::from($input);
+            while s.ends_with("_") {
+                s.truncate(s.len() - 1);
+            }
+            s
+        }
+    }
+}
+
+
 /// Check if folder exists or not, if not, ask user.
 ///
 /// # Arguments
@@ -35,12 +48,8 @@ fn ask_for_new_folder(configuration: &Configuration, path: &str) -> bool {
     let res = stdin().read_line(&mut s);
     s = s.trim().to_string();
 
-    // Extracting migration
-    if !res.is_err() && (s == "Y" || s == "y" || s == "") {
-        return true;
-    }
-
-    false
+    // If there is no error and it's a "yes" we send back true, otherwise false...
+    !res.is_err() && (s == "Y" || s == "y" || s == "")
 }
 
 /// Get the current time.
@@ -155,10 +164,7 @@ fn get_sample_drop_table(engine: &EngineName, name: &str) -> String {
 /// * `table_name` - The table name.
 /// * `column_name` - The column name.
 fn get_sample_create_column(engine: &EngineName, table_name: &str, column_name: &str) -> String {
-    let mut column_name = String::from(column_name);
-    while column_name.ends_with("_") {
-        column_name.truncate(column_name.len() - 1);
-    }
+    let column_name = trim_underscore!(column_name);
     match engine {
         EngineName::MYSQL => format!("ALTER TABLE `{}` ADD COLUMN `{}` VARCHAR(255);", table_name, &column_name),
         EngineName::SQLITE | EngineName::POSTGRESQL => format!("ALTER TABLE \"{}\" ADD COLUMN \"{}\" TEXT;", table_name, &column_name),
@@ -173,10 +179,7 @@ fn get_sample_create_column(engine: &EngineName, table_name: &str, column_name: 
 /// * `table_name` - The table name.
 /// * `column_name` - The column name.
 fn get_sample_drop_column(engine: &EngineName, table_name: &str, column_name: &str) -> String {
-    let mut column_name = String::from(column_name);
-    while column_name.ends_with("_") {
-        column_name.truncate(column_name.len() - 1);
-    }
+    let column_name = trim_underscore!(column_name);
     match engine {
         EngineName::MYSQL => format!("ALTER TABLE `{}` DROP `{}`;", table_name, &column_name),
         EngineName::POSTGRESQL => format!("ALTER TABLE \"{}\" DROP COLUMN \"{}\";", table_name, &column_name),
@@ -193,10 +196,7 @@ fn get_sample_drop_column(engine: &EngineName, table_name: &str, column_name: &s
 /// * `table_name` - The table name.
 /// * `index_name` - The index name.
 fn get_sample_create_index(engine: &EngineName, table_name: &str, index_name: &str) -> String {
-    let mut index_name = String::from(index_name);
-    while index_name.ends_with("_") {
-        index_name.truncate(index_name.len() - 1);
-    }
+    let index_name = trim_underscore!(index_name);
     match engine {
         EngineName::MYSQL | EngineName::SQLITE | EngineName::POSTGRESQL => format!("CREATE INDEX \"idx_{}_{}\" ON \"{}\"(\"{}\");", table_name, &index_name, table_name, &index_name),
     }
@@ -210,10 +210,7 @@ fn get_sample_create_index(engine: &EngineName, table_name: &str, index_name: &s
 /// * `table_name` - The table name.
 /// * `index_name` - The index name.
 fn get_sample_drop_index(engine: &EngineName, table_name: &str, index_name: &str) -> String {
-    let mut index_name = String::from(index_name);
-    while index_name.ends_with("_") {
-        index_name.truncate(index_name.len() - 1);
-    }
+    let index_name = trim_underscore!(index_name);
     match engine {
         EngineName::MYSQL | EngineName::SQLITE | EngineName::POSTGRESQL => format!("DROP INDEX IF EXISTS \"idx_{}_{}\";", table_name, &index_name),
     }
@@ -395,10 +392,7 @@ fn get_sample_drop_materialized_view(engine: &EngineName, name: &str) -> String 
 /// * `trigger_name` - The trigger name.
 /// * `table_name` - The table name.
 fn get_sample_create_trigger(engine: &EngineName, trigger_name: &str, table_name: &str) -> String {
-    let mut trigger_name = String::from(trigger_name);
-    while trigger_name.ends_with("_") {
-        trigger_name.truncate(trigger_name.len() - 1);
-    }
+    let trigger_name = trim_underscore!(trigger_name);
     match engine {
         EngineName::MYSQL => format!("DELIMITER $$\n\nCREATE TRIGGER `{}`\n    AFTER INSERT\n    ON `{}` FOR EACH ROW\nBEGIN\n    -- statements\nEND$$\n\nDELIMITER ;", trigger_name, &table_name),
         EngineName::SQLITE => format!("CREATE TRIGGER IF NOT EXISTS \"{}\"\n    AFTER INSERT\n   ON \"{}\"\nBEGIN\n    -- statements\nEND;", trigger_name, &table_name),
@@ -414,10 +408,7 @@ fn get_sample_create_trigger(engine: &EngineName, trigger_name: &str, table_name
 /// * `trigger_name` - The trigger name.
 /// * `table_name` - The table name.
 fn get_sample_drop_trigger(engine: &EngineName, trigger_name: &str, table_name: &str) -> String {
-    let mut trigger_name = String::from(trigger_name);
-    while trigger_name.ends_with("_") {
-        trigger_name.truncate(trigger_name.len() - 1);
-    }
+    let trigger_name = trim_underscore!(trigger_name);
     match engine {
         EngineName::MYSQL => format!("DROP TRIGGER IF EXISTS `{}`;", trigger_name),
         EngineName::POSTGRESQL => format!("DROP TRIGGER IF EXISTS \"{}\" ON \"{}\";", trigger_name, &table_name),
@@ -725,10 +716,9 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
         Err(e) => crit!("{}", e),
     };
 
-    if mode == 0 {
-        return String::from("-- Your migration goes here");
-    } else {
-        return String::from("-- Your revert goes here");
+    match mode {
+        0 => String::from("-- Your migration goes here"),
+        _ => String::from("-- Your revert goes here")
     }
 }
 
@@ -791,51 +781,64 @@ fn process_create(folder: &str, configuration: &Configuration) {
     // Now is YYYYMMDDhhmmss
     let now = format!("{}{}{}{}{}{}", &t.year, &t.month, &t.day, &t.hour, &t.minute, &t.second);
 
-    if configuration.create_type == CreateType::FILE {
-        let filename = &[&now, "_", &configuration.create_name, ".sql"].join("");
-        let full_filename = Path::new(folder).join(filename);
-        if configuration.debug == true {
-            debug_configuration(configuration);
-            debug!("File to be created:");
-            debug!("{}", full_filename.display());
-        } else {
-            create_file(&full_filename, &get_file_content(0, &configuration));
-        }
-
-    } else if configuration.create_type == CreateType::FOLDER {
-        let full_folder = Path::new(folder).join(&[&now, "_", &configuration.create_name].join(""));
-        let full_folder_str = full_folder.clone().into_os_string().into_string();
-        if full_folder_str.is_err() {
-            crit!("Could not create migration folder: {}", full_folder_str.clone().err().unwrap().into_string().unwrap());
-        }
-        let full_folder_str = full_folder_str.ok().unwrap();
-        if create_folder(&configuration, &full_folder_str) == true {
-            let full_filename_up = full_folder.join("up.sql");
-            let full_filename_down = full_folder.join("down.sql");
+    match configuration.create_type {
+        CreateType::FILE => {
+            let filename = &[&now, "_", &configuration.create_name, ".sql"].join("");
+            let full_filename = Path::new(folder).join(filename);
             if configuration.debug == true {
                 debug_configuration(configuration);
-                debug!("Files to be created:");
-                debug!("{}", full_filename_up.display());
-                debug!("{}", full_filename_down.display());
+                debug!("File to be created:");
+                debug!("{}", full_filename.display());
             } else {
-                create_file(&full_filename_up, &get_file_content(1, &configuration));
-                create_file(&full_filename_down, &get_file_content(2, &configuration));
+                create_file(&full_filename, &get_file_content(0, &configuration));
             }
-        }
+        },
+        CreateType::FOLDER => {
+            let full_folder = Path::new(folder).join(&[&now, "_", &configuration.create_name].join(""));
+            let full_folder_str = match full_folder.clone().into_os_string().into_string() {
+                Ok(s) => s,
+                Err(e) => {
+                    crit!("Could not create migration folder: {}", e.into_string().unwrap());
+                    return;
+                }
+            };
 
-    } else if configuration.create_type == CreateType::SPLITFILES {
-        let full_filename_up = Path::new(folder).join(&[&now, "_", &configuration.create_name, ".up.sql"].join(""));
-        let full_filename_down = Path::new(folder).join(&[&now, "_", &configuration.create_name, ".down.sql"].join(""));
-        if configuration.debug == true {
-            debug_configuration(configuration);
-            debug!("Files to be created:");
-            debug!("{}", full_filename_up.display());
-            debug!("{}", full_filename_down.display());
-        } else {
-            create_file(&full_filename_up, &get_file_content(1, &configuration));
-            create_file(&full_filename_down, &get_file_content(2, &configuration));
+            if create_folder(&configuration, &full_folder_str) == true {
+                let full_filename_up = full_folder.join("up.sql");
+                let full_filename_down = full_folder.join("down.sql");
+
+                match configuration.debug {
+                    true => {
+                        debug_configuration(configuration);
+                        debug!("Files to be created:");
+                        debug!("{}", full_filename_up.display());
+                        debug!("{}", full_filename_down.display());
+                    },
+                    false => {
+                        create_file(&full_filename_up, &get_file_content(1, &configuration));
+                        create_file(&full_filename_down, &get_file_content(2, &configuration));
+                    }
+                };
+            }
+        },
+        CreateType::SPLITFILES => {
+            let full_filename_up = Path::new(folder).join(&[&now, "_", &configuration.create_name, ".up.sql"].join(""));
+            let full_filename_down = Path::new(folder).join(&[&now, "_", &configuration.create_name, ".down.sql"].join(""));
+
+            match configuration.debug {
+                true => {
+                    debug_configuration(configuration);
+                    debug!("Files to be created:");
+                    debug!("{}", full_filename_up.display());
+                    debug!("{}", full_filename_down.display());
+                },
+                false => {
+                    create_file(&full_filename_up, &get_file_content(1, &configuration));
+                    create_file(&full_filename_down, &get_file_content(2, &configuration));
+                }
+            };
         }
-    }
+    };
 }
 
 /// Create new migration file.

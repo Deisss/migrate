@@ -15,28 +15,34 @@ use std::time::Instant;
 /// * `configuration` - The system configuration.
 /// * `files` - The files found.
 pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
-    let db = get_sql_engine(&configuration.engine, configuration);
-    if db.is_err() {
-        crit!("Error getting engine: {:?}", db.as_ref().err());
-    }
-    let mut db = db.unwrap();
+    let mut db = match get_sql_engine(&configuration.engine, configuration) {
+        Ok(db) => db,
+        Err(e) => {
+            crit!("Error getting engine: {:?}", e);
+            return Err(Box::new(EngineError {}));
+        }
+    };
 
     match db.create_migration_table() {
         Err(e) => {
             crit!("Error creating migration table: {:?}", e);
+            return Err(Box::new(EngineError {}));
         },
         _ => {}
     };
 
-    let existing = db.get_migrations();
-    if existing.is_err() {
-        crit!("Error getting migrations: {:?}", existing.as_ref().err());
-    }
-    let mut existing = existing.unwrap();
-
-    if configuration.step > 0 {
-        existing.truncate(configuration.step as usize);
-    }
+    let existing = match db.get_migrations() {
+        Ok(mut e) => {
+            if configuration.step > 0 {
+                e.truncate(configuration.step as usize);
+            }
+            e
+        },
+        Err(e) => {
+            crit!("Error getting migrations: {:?}", e);
+            return Err(Box::new(EngineError {}));
+        }
+    };
 
     // We keep the ones that we can revert
     files.retain(|file| existing.contains(&file.number.to_string()));
