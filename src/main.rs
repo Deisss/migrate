@@ -106,7 +106,7 @@ fn read_config_file(args: &ArgMatches) -> Configuration {
     };
 
     // Loading file...
-    let mut settings = config::Config::builder()
+    let settings = Config::builder()
         .add_source(File::with_name(filename))
         .build().unwrap();
 
