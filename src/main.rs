@@ -106,13 +106,14 @@ fn read_config_file(args: &ArgMatches) -> Configuration {
     };
 
     // Loading file...
-    let mut settings = Config::default();
-    let _config = settings.merge(File::with_name(filename));
+    let mut settings = config::Config::builder()
+        .add_source(File::with_name(filename))
+        .build().unwrap();
 
     let mut configuration: Configuration = Default::default();
 
     // Common configuration
-    configuration.engine = match settings.get::<String>("engine") {
+    configuration.engine = match settings.get_string("engine") {
         Ok(s) => match &s[..] {
             "mysql" => EngineName::MYSQL,
             "sqlite" => EngineName::SQLITE,
@@ -123,24 +124,24 @@ fn read_config_file(args: &ArgMatches) -> Configuration {
         _ => EngineName::POSTGRESQL
     };
 
-    configuration.host = settings.get::<String>("host").unwrap_or(String::from("127.0.0.1"));
-    configuration.table = settings.get::<String>("migration_table").unwrap_or(String::from("_schema_migration"));
+    configuration.host = settings.get_string("host").unwrap_or(String::from("127.0.0.1"));
+    configuration.table = settings.get_string("migration_table").unwrap_or(String::from("_schema_migration"));
 
     if configuration.engine == EngineName::POSTGRESQL {
         configuration.port = settings.get::<u32>("port").unwrap_or(6379);
-        configuration.database = settings.get::<String>("database").unwrap_or(String::from("postgres"));
-        configuration.username = settings.get::<String>("username").unwrap_or(String::from("postgres"));
-        configuration.password = settings.get::<String>("password").unwrap_or(String::new());
+        configuration.database = settings.get_string("database").unwrap_or(String::from("postgres"));
+        configuration.username = settings.get_string("username").unwrap_or(String::from("postgres"));
+        configuration.password = settings.get_string("password").unwrap_or(String::new());
     } else {
         configuration.port = settings.get::<u32>("port").unwrap_or(3306);
-        configuration.database = settings.get::<String>("database").unwrap_or(String::from("mysql"));
-        configuration.username = settings.get::<String>("username").unwrap_or(String::from("root"));
+        configuration.database = settings.get_string("database").unwrap_or(String::from("mysql"));
+        configuration.username = settings.get_string("username").unwrap_or(String::from("root"));
     }
 
     // Common to all
-    configuration.password = settings.get::<String>("password").unwrap_or(String::new());
-    configuration.path = settings.get::<String>("path").unwrap_or(String::from("./migrations"));
-    configuration.migration_type = settings.get::<String>("migration_type").unwrap_or(String::from("migration"));
+    configuration.password = settings.get_string("password").unwrap_or(String::new());
+    configuration.path = settings.get_string("path").unwrap_or(String::from("./migrations"));
+    configuration.migration_type = settings.get_string("migration_type").unwrap_or(String::from("migration"));
 
     configuration
 }

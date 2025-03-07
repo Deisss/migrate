@@ -2,3 +2,4 @@
 /.vscode
 /.idea
 /tests-migrations
+.DS_Store
