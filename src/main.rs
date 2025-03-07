@@ -5,7 +5,7 @@ mod helpers;
 
 use commands::{interactive, up, down, create, status};
 use std::default::Default;
-use clap::{Arg, App, SubCommand, AppSettings, ArgMatches};
+use clap::{Arg, Command, ArgMatches};
 use config::{Config, File};
 use std::time::Instant;
 use std::io::Write;
@@ -99,11 +99,8 @@ pub struct Configuration {
 /// * `args` - Program args.
 fn read_config_file(args: &ArgMatches) -> Configuration {
     // Get configuration file name
-    let filename = if args.is_present("config") {
-        args.value_of("config").unwrap_or("migration")
-    } else {
-        "migration"
-    };
+    let default_config_file = String::from("migration");
+    let filename = args.get_one::<String>("config").unwrap_or(&default_config_file);
 
     // Loading file...
     let settings = Config::builder()
@@ -157,29 +154,30 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
 
     let mut configuration = Configuration {
         command: CommandName::UP,
-        url: args.value_of("url").unwrap_or("").to_string(),
+        url: args.get_one::<String>("url").unwrap_or(&String::from("")).to_string(),
         engine: file_configuration.engine,
-        host: args.value_of("host").unwrap_or(&file_configuration.host).to_string(),
-        port: args.value_of("port").unwrap_or(&file_configuration.port.to_string()).parse::<u32>().unwrap_or(file_configuration.port),
-        database: args.value_of("database").unwrap_or(&file_configuration.database).to_string(),
-        username: args.value_of("username").unwrap_or(&file_configuration.username).to_string(),
+        host: args.get_one::<String>("host").unwrap_or(&String::from(file_configuration.host)).to_string(),
+        port: *args.get_one::<u32>("port").unwrap_or(&file_configuration.port),
+        database: args.get_one::<String>("database").unwrap_or(&String::from(file_configuration.database)).to_string(),
+        username: args.get_one::<String>("username").unwrap_or(&String::from(file_configuration.username)).to_string(),
         password: file_configuration.password,
-        table: args.value_of("migration_table").unwrap_or(&file_configuration.table).to_string(),
-        path: args.value_of("path").unwrap_or(&file_configuration.path).to_string(),
-        interactive: args.is_present("interactive"),
-        continue_on_error: args.is_present("continue-on-error"),
-        version: args.value_of("version").unwrap_or("").to_string(),
+        table: args.get_one::<String>("migration_table").unwrap_or(&String::from(file_configuration.table)).to_string(),
+        path: args.get_one::<String>("path").unwrap_or(&String::from(file_configuration.path)).to_string(),
+        interactive: args.get_flag("interactive"),
+        continue_on_error: args.get_flag("continue-on-error"),
+        version: args.get_one::<String>("version").unwrap_or(&String::from("")).to_string(),
         migration_type: file_configuration.migration_type,
         step: 0,
-        debug: args.is_present("debug"),
-        skip_transactions: args.is_present("skip-transactions"),
+        debug: args.get_flag("debug"),
+        skip_transactions: args.get_flag("skip-transactions"),
         interactive_days: 0,
-        create_name: args.value_of("name").unwrap_or("").to_string(),
+        create_name: args.get_one::<String>("name").unwrap_or(&String::from("")).to_string(),
         create_type: CreateType::FOLDER,
     };
 
-    if args.is_present("engine") {
-        let engine = args.value_of("engine").unwrap_or("postgresql");
+    if args.get_flag("engine") {
+        let default_engine = String::from("postgresql");
+        let engine = args.get_one::<String>("engine").unwrap_or(&default_engine).as_str();
         configuration.engine = match engine {
             "mysql" => EngineName::MYSQL,
             "sqlite" => EngineName::SQLITE,
@@ -187,7 +185,7 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
         };
     }
 
-    if args.is_present("password") {
+    if args.get_flag("password") {
         let term = Term::stdout();
         write!(&term, "Password:").unwrap();
         let password = term.read_secure_line().unwrap();
@@ -202,9 +200,9 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
             CommandName::STATUS
         };
 
-        configuration.interactive_days = if args.is_present("days") {
-            args.value_of("days").unwrap_or("0").parse::<u32>().unwrap_or(0)
-        } else if args.is_present("last-month") {
+        configuration.interactive_days = if args.get_flag("days") {
+            args.get_one::<String>("days").unwrap_or(&String::from("0")).parse::<u32>().unwrap_or(0)
+        } else if args.get_flag("last-month") {
             31
         } else {
             0
@@ -213,24 +211,25 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
 
     // Specific to up command
     if cmd == "up" {
-        configuration.step = args.value_of("step").unwrap_or("0").parse::<u32>().unwrap_or(0);
+        configuration.step = args.get_one::<String>("step").unwrap_or(&String::from("0")).parse::<u32>().unwrap_or(0);
     }
 
     // Specific to down command
     if cmd == "down" {
         configuration.command = CommandName::DOWN;
-        configuration.step = if args.is_present("all") {
+        configuration.step = if args.get_flag("all") {
             0
         } else {
             // Default, if nothing is set, will be 1.
-            args.value_of("step").unwrap_or("1").parse::<u32>().unwrap_or(1)
+            args.get_one::<String>("step").unwrap_or(&String::from("1")).parse::<u32>().unwrap_or(1)
         };
     }
 
     // Specific to create command
     if cmd == "create" {
         configuration.command = CommandName::CREATE;
-        let create_type = args.value_of("folder_type").unwrap_or("folder");
+        let default_create_type = String::from("folder");
+        let create_type = args.get_one::<String>("folder_type").unwrap_or(&default_create_type).as_str();
         configuration.create_type = match create_type {
             "file" | "files" => CreateType::FILE,
             "split" | "split-file" | "split-files" => CreateType::SPLITFILES,
@@ -289,199 +288,176 @@ fn main() {
     let guard = slog_scope::set_global_logger(slog::Logger::root(drain_both.fuse(), o!()));
 
     // Command line arguments & parsing
-    let base = SubCommand::with_name("base")
-        .setting(AppSettings::DeriveDisplayOrder)
+    let base = Command::new("base")
         .about("base")
-        .arg(Arg::with_name("url")
-            .short("u")
+        .arg(Arg::new("url")
+            .short('u')
             .long("url")
             .value_name("URL")
             .help("Set the url used to connect to database")
-            .conflicts_with_all(&["config", "engine", "host", "port", "database", "username", "password"])
-            .takes_value(true))
-        .arg(Arg::with_name("config")
-            .short("c")
+            .conflicts_with_all(&["config", "engine", "host", "port", "database", "username", "password"]))
+        .arg(Arg::new("config")
+            .short('c')
             .long("config")
             .value_name("FILE")
             .help("Load config file [default: migration.(json|hjson|yml|toml)]")
-            .conflicts_with("url")
-            .takes_value(true))
-        .arg(Arg::with_name("engine")
-            .short("e")
+            .conflicts_with("url"))
+        .arg(Arg::new("engine")
+            .short('e')
             .long("engine")
             .value_name("ENGINE")
             .help("Define which engine [default: postgresql]")
-            .conflicts_with("url")
-            .takes_value(true))
-        .arg(Arg::with_name("host")
-            .short("h")
+            .conflicts_with("url"))
+        .arg(Arg::new("host")
+            .short('h')
             .long("host")
             .value_name("HOST")
             .help("Set the database host [default: 127.0.0.1]")
-            .conflicts_with("url")
-            .takes_value(true))
-        .arg(Arg::with_name("port")
-            .short("p")
+            .conflicts_with("url"))
+        .arg(Arg::new("port")
+            .short('p')
             .long("port")
             .value_name("PORT")
             .help("Set the database port [default: 6379 (postgres) | 3306 (mysql)]")
-            .conflicts_with("url")
-            .takes_value(true))
-        .arg(Arg::with_name("database")
-            .short("d")
+            .conflicts_with("url"))
+        .arg(Arg::new("database")
+            .short('d')
             .long("database")
             .value_name("DATABASE")
             .help("Set the database name [default: postgres (postgres) | mysql (mysql)]")
-            .conflicts_with("url")
-            .takes_value(true))
-        .arg(Arg::with_name("username")
-            .short("U")
+            .conflicts_with("url"))
+        .arg(Arg::new("username")
+            .short('U')
             .long("username")
             .value_name("USERNAME")
             .help("Set the database username [default: postgres (postgres) | root (mysql)]")
-            .conflicts_with("url")
-            .takes_value(true))
-        .arg(Arg::with_name("password")
-            .short("W")
+            .conflicts_with("url"))
+        .arg(Arg::new("password")
+            .short('W')
             .long("password")
             .help("Set the database password")
             .conflicts_with("url")
-            .takes_value(false))
-        .arg(Arg::with_name("path")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("path")
             .long("path")
             .value_name("PATH")
-            .help("Folder to locate migration scripts [default: ./migrations]")
-            .takes_value(true))
-        .arg(Arg::with_name("migration_type")
+            .help("Folder to locate migration scripts [default: ./migrations]"))
+        .arg(Arg::new("migration_type")
             .long("migration_type")
-            .short("mt")
             .value_name("MIGRATION_TYPE")
-            .help("Set the type of migration [default: migration]")
-            .takes_value(true))
-        .arg(Arg::with_name("debug")
+            .help("Set the type of migration [default: migration]"))
+        .arg(Arg::new("debug")
             .long("debug")
             .help("If set, this parameter will only print the configuration and do nothing")
-            .takes_value(false));
+            .action(clap::ArgAction::SetTrue));
 
     // Create command
     let mut create = base.clone();
     create = create.name("create")
         .about("Create a new migration file")
-        .arg(Arg::with_name("folder_type")
+        .arg(Arg::new("folder_type")
             .long("folder_type")
             .value_name("FOLDER_TYPE")
-            .help("Create a folder containing up and down files [default: folder]")
-            .takes_value(true))
-        .arg(Arg::with_name("name")
+            .help("Create a folder containing up and down files [default: folder]"))
+        .arg(Arg::new("name")
             .value_name("MIGRATION_NAME")
-            .help("The migration's name")
-            .required(true));
+            .help("The migration's name"));
 
     // Up is a copy of base with the version...
     let mut up = base.clone();
     up = up.name("up")
         .about("migrate database")
-        .arg(Arg::with_name("version")
+        .arg(Arg::new("version")
             .long("version")
             .value_name("VERSION")
             .help("Take care of only one specific migration script (based on timestamp)")
-            .conflicts_with("step")
-            .takes_value(true))
-        .arg(Arg::with_name("migration_table")
+            .conflicts_with("step"))
+        .arg(Arg::new("migration_table")
             .long("migration_table")
-            .short("t")
+            .short('t')
             .value_name("TABLE_NAME")
-            .help("Set the default migration table name")
-            .takes_value(true))
-        .arg(Arg::with_name("step")
+            .help("Set the default migration table name"))
+        .arg(Arg::new("step")
             .long("step")
             .value_name("NUMBER_OF_STEP")
             .help("Rollback X step(s) from the last found in database")
-            .conflicts_with("version")
-            .takes_value(true))
-        .arg(Arg::with_name("skip-transactions")
+            .conflicts_with("version"))
+        .arg(Arg::new("skip-transactions")
             .long("skip-transactions")
             .help("If set, each file that has to be migrated WILL NOT run in a transaction, note that you can set this per file")
-            .takes_value(false))
-        .arg(Arg::with_name("continue-on-error")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("continue-on-error")
             .long("continue-on-error")
             .help("Continue if an error is encoutered (not recommended)")
-            .takes_value(false));
+            .action(clap::ArgAction::SetTrue));
 
     // Interactive also supports version but it's a different thing...
     let mut interactive = base.clone();
     interactive = interactive.name("interactive")
         .about("migrate up/down in an easy way")
-        .arg(Arg::with_name("version")
+        .arg(Arg::new("version")
             .long("version")
             .value_name("VERSION")
-            .help("Start from the given version (don't care of previous ones)")
-            .takes_value(true))
-        .arg(Arg::with_name("migration_table")
+            .help("Start from the given version (don't care of previous ones)"))
+        .arg(Arg::new("migration_table")
             .long("migration_table")
-            .short("t")
+            .short('t')
             .value_name("TABLE_NAME")
-            .help("Set the default migration table name")
-            .takes_value(true))
-        .arg(Arg::with_name("days")
+            .help("Set the default migration table name"))
+        .arg(Arg::new("days")
             .long("days")
             .value_name("NUMBER_OF_DAYS")
-            .help("How many days back we should use for the interactive mode (any migration before X days will not be shown)")
-            .takes_value(true))
-        .arg(Arg::with_name("last-month")
+            .help("How many days back we should use for the interactive mode (any migration before X days will not be shown)"))
+        .arg(Arg::new("last-month")
             .long("last-month")
             .help("Same as days except it automatically takes 31 days")
-            .takes_value(false))
-        .arg(Arg::with_name("skip-transactions")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("skip-transactions")
             .long("skip-transactions")
             .help("If set, each file that has to be migrated WILL NOT run in a transaction, note that you can set this per file")
-            .takes_value(false));
+            .action(clap::ArgAction::SetTrue));
 
     let mut status = interactive.clone();
     status = status.name("status")
         .about("check the database status regarding migrations");
 
-    let custom_interactive = interactive.clone();
+    let _custom_interactive = interactive.clone();
 
     // Down is a copy of up with the step...
     let mut down = base.clone();
     down = down.name("down")
            .about("rollback database")
-        .arg(Arg::with_name("version")
+        .arg(Arg::new("version")
             .long("version")
             .value_name("VERSION")
             .help("Take care of only one specific migration script (based on timestamp)")
-            .conflicts_with("step")
-            .takes_value(true))
-        .arg(Arg::with_name("skip-transactions")
+            .conflicts_with("step"))
+        .arg(Arg::new("skip-transactions")
             .long("skip-transactions")
             .help("If set, each file that has to be migrated WILL NOT run in a transaction, note that you can set this per file")
-            .takes_value(false))
-        .arg(Arg::with_name("continue-on-error")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("continue-on-error")
             .long("continue-on-error")
             .help("Continue if an error is encoutered (not recommended)")
-            .takes_value(false))
-        .arg(Arg::with_name("migration_table")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("migration_table")
             .long("migration_table")
-            .short("t")
+            .short('t')
             .value_name("TABLE_NAME")
-            .help("Set the default migration table name")
-            .takes_value(true))
-        .arg(Arg::with_name("step")
+            .help("Set the default migration table name"))
+        .arg(Arg::new("step")
             .long("step")
             .value_name("NUMBER_OF_STEP")
             .help("Rollback X step(s) from the last found in database")
-            .conflicts_with("version")
-            .takes_value(true))
-        .arg(Arg::with_name("all")
+            .conflicts_with("version"))
+        .arg(Arg::new("all")
             .long("all")
             .help("If set, will rollback everything (dangerous)")
-            .takes_value(false));
+            .action(clap::ArgAction::SetTrue));
 
-    let matches = App::new("Migration")
-        .version("0.1.3")
+    let matches = Command::new("Migration")
+        .version("0.1.5")
         .about("Handle migration of database schema")
-        .setting(AppSettings::DeriveDisplayOrder)
         .subcommand(create)
         .subcommand(up)
         .subcommand(down)
@@ -491,30 +467,30 @@ fn main() {
 
     // Selecting the right sub-command to run
     let configuration: Configuration = match matches.subcommand() {
-        ("create", Some(create_matches)) => extract_parameters("create", &create_matches),
-        ("up", Some(up_matches)) => extract_parameters("up", &up_matches),
-        ("down", Some(down_matches)) => extract_parameters("down", &down_matches),
-        ("status", Some(status_matches)) => extract_parameters("status", &status_matches),
-        ("", interactive_options) | ("interactive", interactive_options) => {
-            match interactive_options {
-                Some(options) => extract_parameters("interactive", &options),
-                None => {
-                    // We generate some fake pre-defined command args
-                    let custom_matches = App::new("Migration")
-                        .subcommand(custom_interactive)
-                        .get_matches_from_safe_borrow(vec!["migrate", "interactive", "-c", "migration"]);
+        Some(("create", create_matches)) => extract_parameters("create", &create_matches),
+        Some(("up", up_matches)) => extract_parameters("up", &up_matches),
+        Some(("down", down_matches)) => extract_parameters("down", &down_matches),
+        Some(("status", status_matches)) => extract_parameters("status", &status_matches),
+        Some(("", interactive_options)) | Some(("interactive", interactive_options)) => {
+            extract_parameters("interactive", &interactive_options)
+        },
+        /*
+        Some(("", _)) | Some(("interactive", _))  => {
+            // We generate some fake pre-defined command args
+            let custom_matches = Command::new("Migration")
+                .subcommand(custom_interactive)
+                .get_matches_from(vec!["migrate", "interactive", "-c", "migration"]);
 
-                    match custom_matches.unwrap_or_default().subcommand() {
-                        ("interactive", Some(interactive_matches)) => extract_parameters("interactive", &interactive_matches),
-                        ("", None) => {
-                            info!("Use --help to get started with");
-                            Default::default()
-                        },
-                        _ => unreachable!(),
-                    }
-                }
+            match custom_matches.subcommand() {
+                Some(("interactive", interactive_matches)) => extract_parameters("interactive", &interactive_matches),
+                Some(("", _)) => {
+                    info!("Use --help to get started with");
+                    Default::default()
+                },
+                _ => unreachable!(),
             }
         },
+        */
         _ => unreachable!(), // If all sub-commands are defined above, anything else is unreachable!()
     };
 
