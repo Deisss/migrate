@@ -1,6 +1,6 @@
 [package]
 name = "migrate"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Deisss <deisss@free.fr>"]
 edition = "2018"
 license = "MIT"
@@ -10,22 +10,22 @@ categories = ["command-line-utilities", "development-tools"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-config = "0.11"
-clap = "2.33.3"
-glob = "0.3.0"
+config = "0.15"
+clap = "4.5.31"
+glob = "0.3"
 regex = "1"
-native-tls = "0.2.8"
-postgres-native-tls = "0.5.0"
-postgres = "0.19.1"
-rusqlite = { version = "0.25.3", features = ["bundled"] }
-mysql = "18.1.0"
-slog = "2.5.2"
-slog-async = "2.5.0"
-slog-term = "2.5.0"
-slog-scope = "4.3.0"
-chrono = "0.4.19"
+native-tls = "0.2.14"
+postgres-native-tls = "0.5.1"
+postgres = "0.19.10"
+rusqlite = { version = "0.34", features = ["bundled"] }
+mysql = "26.0.0"
+slog = "2.7"
+slog-async = "2.8"
+slog-term = "2.9.1"
+slog-scope = "4.4.0"
+chrono = "0.4.40"
 md5 = "0.7.0"
-console = "0.14.1"
+console = "0.15"
 
 [profile.release]
 opt-level = 'z'

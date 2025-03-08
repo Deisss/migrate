@@ -40,7 +40,7 @@ impl SqlEngine for Sqlite {
         let get_migration = format!("SELECT \"migration\" FROM \"{}\" ORDER BY \"migration\" DESC", self.migration_table_name);
         let mut stmt = self.client.prepare(&get_migration as &str)?;
         let mut results: Vec<String> = Vec::new();
-        stmt.query_map([], |row| {
+        let _ = stmt.query_map([], |row| {
             let tmp = row.get(0);
             if tmp.is_ok() {
                 results.push(tmp.unwrap());
@@ -54,7 +54,7 @@ impl SqlEngine for Sqlite {
         let get_migration = format!("SELECT \"migration\", \"hash\", \"file_name\" FROM \"{}\" WHERE \"type\" = $1 ORDER BY \"migration\" DESC", self.migration_table_name);
         let mut stmt = self.client.prepare(&get_migration as &str)?;
         let mut results: Vec<(String, String, String)> = Vec::new();
-        stmt.query_map(&[&migration_type], |row| {
+        let _ = stmt.query_map(&[&migration_type], |row| {
             let migration_name = row.get(0);
             let migration_hash = row.get(1);
             let migration_file = row.get(2);

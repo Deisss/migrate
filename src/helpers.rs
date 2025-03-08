@@ -51,7 +51,7 @@ pub fn readable_time(time_ms: u128) -> String {
 ///
 /// * `s` - The content to split.
 fn split_new_line(s: &str) -> Vec<String> {
-    let mut destructive = s.clone();
+    let mut destructive = s;
     let mut lf = destructive.find('\n');
     let mut results: Vec<String> = Vec::new();
 
