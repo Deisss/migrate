@@ -8,11 +8,12 @@ use std::result::Result;
 pub struct Mysql {
     client: PooledConn,
     migration_table_name: String,
+    logger: slog::Logger,
 }
 
 impl Mysql {
     /// Create MySQL
-    pub fn new(url: &str, migration_table_name: &str) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
+    pub fn new(url: &str, migration_table_name: &str, logger: &slog::Logger) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
         match Pool::new(url) {
             Ok(client) => {
                 match client.get_conn() {
@@ -20,16 +21,17 @@ impl Mysql {
                         Ok(Box::new(Mysql {
                             client: connection,
                             migration_table_name: migration_table_name.to_owned(),
+                            logger: logger.clone(),
                         }))
                     },
                     Err(e) => {
-                        crit!("Could not connect to MySQL: {}", e);
+                        slog::crit!(logger, "Could not connect to MySQL: {}", e);
                         return Err(Box::new(e));
                     }
                 }
             },
             Err(e) => {
-                crit!("Could not create instance of MySQL: {}", e);
+                slog::crit!(logger, "Could not create instance of MySQL: {}", e);
                 Err(Box::new(e))
             }
         }
@@ -53,7 +55,7 @@ impl SqlEngine for Mysql {
         match data {
             Ok(data) => Ok(data),
             Err(e) => {
-                crit!("Error getting migration: {}", e);
+                slog::crit!(&self.logger, "Error getting migration: {}", e);
                 Err(Box::new(e))
             }
         }
@@ -67,7 +69,7 @@ impl SqlEngine for Mysql {
         match data {
             Ok(data) => Ok(data),
             Err(e) => {
-                crit!("Error getting migration: {}", e);
+                slog::crit!(&self.logger, "Error getting migration: {}", e);
                 Err(Box::new(e))
             }
         }
@@ -88,13 +90,13 @@ impl SqlEngine for Mysql {
                         match self.client.exec_drop(&insert as &str, (&version, &hash, &migration_type, &file_name,)) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e.to_string());
+                                slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                 Err(Box::new(e))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("{}", e);
+                        slog::crit!(&self.logger, "{}", e);
                         Err(Box::new(EngineError {}))
                     }
                 }
@@ -114,25 +116,25 @@ impl SqlEngine for Mysql {
                                         match trx.commit() {
                                             Ok(_) => Ok(()),
                                             Err(e) => {
-                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                slog::crit!(&self.logger, "Failed to commit transaction: {}", e.to_string());
                                                 Err(Box::new(e))
                                             }
                                         }
                                     },
                                     Err(e) => {
-                                        crit!("Could store result in migration table: {}", e.to_string());
+                                        slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                         Err(Box::new(e))
                                     }
                                 }
                             },
                             Err(e) => {
-                                crit!("{}", e);
+                                slog::crit!(&self.logger, "{}", e);
                                 Err(Box::new(EngineError {}))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("Could not create a transaction: {}", e);
+                        slog::crit!(&self.logger, "Could not create a transaction: {}", e);
                         Err(Box::new(e))
                     }
                 }
@@ -152,13 +154,13 @@ impl SqlEngine for Mysql {
                         match self.client.exec_drop(&del as &str, (&version,)) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e.to_string());
+                                slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                 Err(Box::new(e))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("{}", e);
+                        slog::crit!(&self.logger, "{}", e);
                         Err(Box::new(EngineError {}))
                     }
                 }
@@ -176,25 +178,25 @@ impl SqlEngine for Mysql {
                                         match trx.commit() {
                                             Ok(_) => Ok(()),
                                             Err(e) => {
-                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                slog::crit!(&self.logger, "Failed to commit transaction: {}", e.to_string());
                                                 Err(Box::new(e))
                                             }
                                         }
                                     },
                                     Err(e) => {
-                                        crit!("Could store result in migration table: {}", e.to_string());
+                                        slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                         Err(Box::new(e))
                                     }
                                 }
                             },
                             Err(e) => {
-                                crit!("{}", e);
+                                slog::crit!(&self.logger, "{}", e);
                                 Err(Box::new(EngineError {}))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("Could not create a transaction: {}", e);
+                        slog::crit!(&self.logger, "Could not create a transaction: {}", e);
                         Err(Box::new(e))
                     }
                 }

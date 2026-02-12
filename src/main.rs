@@ -11,10 +11,8 @@ use std::time::Instant;
 use std::io::Write;
 use console::Term;
 
-#[macro_use(slog_o, slog_info, slog_log, slog_record, slog_record_static, slog_b, slog_kv)]
-extern crate slog;
 #[macro_use]
-extern crate slog_scope;
+extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 use slog::Drain;
@@ -256,13 +254,14 @@ fn extract_parameters(cmd: &str, args: &ArgMatches) -> Configuration {
 /// # Arguments
 ///
 /// * `configuration` - Configuration of the application
-fn apply_command(configuration: &Configuration) -> bool {
+/// * `logger` - Logger instance for the application
+fn apply_command(configuration: &Configuration, logger: &slog::Logger) -> bool {
     match configuration.command {
-        CommandName::CREATE => create::process(configuration),
-        CommandName::UP => up::process(configuration),
-        CommandName::DOWN => down::process(configuration),
-        CommandName::INTERACTIVE => interactive::process(configuration),
-        CommandName::STATUS => status::process(configuration),
+        CommandName::CREATE => create::process(configuration, logger),
+        CommandName::UP => up::process(configuration, logger),
+        CommandName::DOWN => down::process(configuration, logger),
+        CommandName::INTERACTIVE => interactive::process(configuration, logger),
+        CommandName::STATUS => status::process(configuration, logger),
     }
 }
 
@@ -285,7 +284,7 @@ fn main() {
     let drain_stderr = slog_async::Async::new(drain_stderr).build().fuse();
     // Building logger
     let drain_both = slog::Duplicate(drain_stdout, drain_stderr);
-    let guard = slog_scope::set_global_logger(slog::Logger::root(drain_both.fuse(), o!()));
+    let logger = slog::Logger::root(drain_both.fuse(), o!());
 
     // Command line arguments & parsing
     let base = Command::new("base")
@@ -456,7 +455,7 @@ fn main() {
             .action(clap::ArgAction::SetTrue));
 
     let matches = Command::new("Migration")
-        .version("0.1.5")
+        .version("0.1.6")
         .about("Handle migration of database schema")
         .subcommand(create)
         .subcommand(up)
@@ -484,7 +483,7 @@ fn main() {
             match custom_matches.subcommand() {
                 Some(("interactive", interactive_matches)) => extract_parameters("interactive", &interactive_matches),
                 Some(("", _)) => {
-                    info!("Use --help to get started with");
+                    slog::info!(&logger, "Use --help to get started with");
                     Default::default()
                 },
                 _ => unreachable!(),
@@ -495,14 +494,13 @@ fn main() {
     };
 
     // Starting the application
-    let result = apply_command(&configuration);
+    let result = apply_command(&configuration, &logger);
     let time_taken = &helpers::readable_time(whole_application_time.elapsed().as_millis());
 
     match result {
-        true => debug!("done, took {}", time_taken),
+        true => slog::debug!(&logger, "done, took {}", time_taken),
         false => {
-            crit!("failed, took {}", time_taken);
-            drop(guard);
+            slog::crit!(&logger, "failed, took {}", time_taken);
             std::process::exit(1);
         },
     }

@@ -1,6 +1,6 @@
 [package]
 name = "migrate"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Deisss <deisss@free.fr>"]
 edition = "2018"
 license = "MIT"
@@ -22,7 +22,6 @@ mysql = "27"
 slog = "2.8"
 slog-async = "2.8"
 slog-term = "2.9.2"
-slog-scope = "4.4"
 chrono = "0.4"
 md5 = "0.8"
 console = "0.16"

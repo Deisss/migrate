@@ -7,20 +7,22 @@ use md5;
 pub struct Sqlite {
     client: Connection,
     migration_table_name: String,
+    logger: slog::Logger,
 }
 
 impl Sqlite {
     /// Create SQLite
-    pub fn new(url: &str, migration_table_name: &str) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
+    pub fn new(url: &str, migration_table_name: &str, logger: &slog::Logger) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
         match Connection::open(url) {
             Ok(connection) => {
                 Ok(Box::new(Sqlite {
                     client: connection,
                     migration_table_name: migration_table_name.to_owned(),
+                    logger: logger.clone(),
                 }))
             },
             Err(e) => {
-                crit!("Could not open database for SqLite: {}", e);
+                slog::crit!(logger, "Could not open database for SqLite: {}", e);
                 Err(Box::new(e))
             }
         }
@@ -80,7 +82,7 @@ impl SqlEngine for Sqlite {
                         match self.client.execute(&insert as &str, &[&version, &hash[..], &migration_type, &file_name]) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e.to_string());
+                                slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                 Err(Box::new(e))
                             }
                         }
@@ -108,13 +110,13 @@ impl SqlEngine for Sqlite {
                                         match trx.commit() {
                                             Ok(_) => Ok(()),
                                             Err(e) => {
-                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                slog::crit!(&self.logger, "Failed to commit transaction: {}", e.to_string());
                                                 Err(Box::new(e))
                                             }
                                         }
                                     },
                                     Err(e) => {
-                                        crit!("Could store result in migration table: {}", e);
+                                        slog::crit!(&self.logger, "Could store result in migration table: {}", e);
                                         Err(Box::new(e))
                                     }
                                 }
@@ -126,7 +128,7 @@ impl SqlEngine for Sqlite {
                         }
                     },
                     Err(e) => {
-                        crit!("Could not create a transaction: {}", e);
+                        slog::crit!(&self.logger, "Could not create a transaction: {}", e);
                         Err(Box::new(e))
                     }
                 }
@@ -145,7 +147,7 @@ impl SqlEngine for Sqlite {
                         match self.client.execute(&del as &str, &[&version]) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e.to_string());
+                                slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                 Err(Box::new(e))
                             }
                         }
@@ -171,13 +173,13 @@ impl SqlEngine for Sqlite {
                                         match trx.commit() {
                                             Ok(_) => Ok(()),
                                             Err(e) => {
-                                                crit!("Failed to commit transaction: {}", e.to_string());
+                                                slog::crit!(&self.logger, "Failed to commit transaction: {}", e.to_string());
                                                 Err(Box::new(e))
                                             }
                                         }
                                     },
                                     Err(e) => {
-                                        crit!("Could store result in migration table: {}", e.to_string());
+                                        slog::crit!(&self.logger, "Could store result in migration table: {}", e.to_string());
                                         Err(Box::new(e))
                                     }
                                 }
@@ -189,7 +191,7 @@ impl SqlEngine for Sqlite {
                         }
                     },
                     Err(e) => {
-                        crit!("Could not create a transaction: {}", e);
+                        slog::crit!(&self.logger, "Could not create a transaction: {}", e);
                         Err(Box::new(e))
                     }
                 }

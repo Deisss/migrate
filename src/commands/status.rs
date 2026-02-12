@@ -68,8 +68,9 @@ fn show_status(root: &str, migrations: &mut Vec<InteractiveMigration>) {
 ///
 /// * `configuration` - The system configuration.
 /// * `files` - The files.
-fn process_status_sql(configuration: &Configuration, files: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
-    match get_sql_engine(&configuration.engine, configuration) {
+/// * `logger` - Logger instance.
+fn process_status_sql(configuration: &Configuration, files: &mut Vec<File>, logger: &slog::Logger) -> Result<(), Box<dyn Error>> {
+    match get_sql_engine(&configuration.engine, configuration, logger) {
         Ok(mut db) => {
             match db.create_migration_table() {
                 Ok(_) => {
@@ -80,25 +81,25 @@ fn process_status_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
                                 files.retain(|file| limit_per_date(&file.number.to_string(), configuration.interactive_days));
                             }
 
-                            let mut to_show = merge_migrations_and_files(&existing, files);
+                            let mut to_show = merge_migrations_and_files(&existing, files, logger);
                             show_status(&configuration.path, &mut to_show);
 
                             Ok(())
                         },
                         Err(e) => {
-                            crit!("Error getting migrations: {:?}", e);
+                            slog::crit!(logger, "Error getting migrations: {:?}", e);
                             Err(Box::new(EngineError {}))
                         }
                     }
                 },
                 Err(e) => {
-                    crit!("Error creating migration table: {:?}", e);
+                    slog::crit!(logger, "Error creating migration table: {:?}", e);
                     Err(Box::new(EngineError {}))
                 }
             }
         },
         Err(e) => {
-            crit!("Error getting engine: {:?}", e);
+            slog::crit!(logger, "Error getting engine: {:?}", e);
             Err(Box::new(EngineError {}))
         }
     }
@@ -109,13 +110,14 @@ fn process_status_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
 /// # Arguments
 ///
 /// * `configuration` - The configuration to use
-pub fn process(configuration: &Configuration) -> bool {
-    let mut files = filesystem::migrations(&configuration.path, None);
+/// * `logger` - Logger instance
+pub fn process(configuration: &Configuration, logger: &slog::Logger) -> bool {
+    let mut files = filesystem::migrations(&configuration.path, None, logger);
     files.sort_by(|f1, f2| f1.partial_cmp(f2).unwrap());
 
     match configuration.engine {
         EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
-            match process_status_sql(configuration, &mut files) {
+            match process_status_sql(configuration, &mut files, logger) {
                 Err(_e) => false,
                 _ => true
             }
