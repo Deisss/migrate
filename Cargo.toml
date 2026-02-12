@@ -11,21 +11,21 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 config = "0.15"
-clap = "4.5.31"
+clap = "4.5"
 glob = "0.3"
 regex = "1"
 native-tls = "0.2.14"
-postgres-native-tls = "0.5.1"
-postgres = "0.19.10"
-rusqlite = { version = "0.34", features = ["bundled"] }
-mysql = "26.0.0"
-slog = "2.7"
+postgres-native-tls = "0.5.2"
+postgres = "0.19.12"
+rusqlite = { version = "0.38", features = ["bundled"] }
+mysql = "27"
+slog = "2.8"
 slog-async = "2.8"
-slog-term = "2.9.1"
-slog-scope = "4.4.0"
-chrono = "0.4.40"
-md5 = "0.7.0"
-console = "0.15"
+slog-term = "2.9.2"
+slog-scope = "4.4"
+chrono = "0.4"
+md5 = "0.8"
+console = "0.16"
 
 [profile.release]
 opt-level = 'z'

@@ -11,7 +11,7 @@ use std::time::Instant;
 use std::io::Write;
 use console::Term;
 
-#[macro_use]
+#[macro_use(slog_o, slog_info, slog_log, slog_record, slog_record_static, slog_b, slog_kv)]
 extern crate slog;
 #[macro_use]
 extern crate slog_scope;
