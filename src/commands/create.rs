@@ -74,13 +74,13 @@ fn get_current_time() -> CurrentTime {
 /// # Arguments
 ///
 /// * `path` - The folder to create.
-fn create_folder(configuration: &Configuration, path: &str) -> bool {
+fn create_folder(configuration: &Configuration, path: &str, logger: &slog::Logger) -> bool {
     match configuration.debug {
         true => true,
         false => match create_dir_all(path) {
             Ok(_) => true,
             Err(e) => {
-                crit!("Could not create migration folder: {}", e);
+                slog::crit!(logger, "Could not create migration folder: {}", e);
                 false
             }
         }
@@ -93,15 +93,15 @@ fn create_folder(configuration: &Configuration, path: &str) -> bool {
 ///
 /// * `filename` - The filename to write into.
 /// * `content` - The content to set.
-fn create_file(filename: &PathBuf, content: &str) {
+fn create_file(filename: &PathBuf, content: &str, logger: &slog::Logger) {
     match File::create(filename) {
         Ok(mut file) => {
             match write!(file, "{}", content) {
-                Err(e) => crit!("Could not write to file: {}", e),
+                Err(e) => slog::crit!(logger, "Could not write to file: {}", e),
                 _ => {}
             }
         },
-        Err(e) => crit!("Could not create file: {}", e)
+        Err(e) => slog::crit!(logger, "Could not create file: {}", e)
     }
 }
 
@@ -420,8 +420,10 @@ fn get_sample_drop_trigger(engine: &EngineName, trigger_name: &str, table_name: 
 ///
 /// # Arguments
 ///
+/// * `mode` - The mode (0 = up, 1 = down).
 /// * `configuration` - The configuration.
-fn get_sample(mode: usize, configuration: &Configuration) -> String {
+/// * `logger` - Logger instance.
+fn get_sample(mode: usize, configuration: &Configuration, logger: &slog::Logger) -> String {
     let s = configuration.create_name.clone();
 
     // Create table
@@ -435,7 +437,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove table
@@ -449,7 +451,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Add column
@@ -466,7 +468,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove column
@@ -483,7 +485,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create index
@@ -497,7 +499,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove index
@@ -511,7 +513,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create function
@@ -525,7 +527,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove function
@@ -539,7 +541,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create enum
@@ -553,7 +555,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove enum
@@ -567,7 +569,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create type
@@ -581,7 +583,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove type
@@ -595,7 +597,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create domain
@@ -609,7 +611,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove domain
@@ -623,7 +625,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create view
@@ -637,7 +639,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove view
@@ -651,7 +653,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create materialized view
@@ -665,7 +667,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove materialized view
@@ -679,7 +681,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Create trigger
@@ -696,7 +698,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     // Remove trigger
@@ -713,7 +715,7 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
                 }
             }
         },
-        Err(e) => crit!("{}", e),
+        Err(e) => slog::crit!(logger, "{}", e),
     };
 
     match mode {
@@ -726,14 +728,15 @@ fn get_sample(mode: usize, configuration: &Configuration) -> String {
 ///
 /// # Arguments
 ///
-/// * `folder` - The folder to put migration into.
+/// * `t` - The file type (0 = single file, 1 = up, 2 = down).
 /// * `configuration` - The migration configuration.
-fn get_file_content(t: usize, configuration: &Configuration) -> String {
+/// * `logger` - Logger instance.
+fn get_file_content(t: usize, configuration: &Configuration, logger: &slog::Logger) -> String {
     let mut s: String = String::new();
     let mut up_command = String::new();
     let mut down_command = String::new();
-    let up_sample = get_sample(0, &configuration);
-    let down_sample = get_sample(1, &configuration);
+    let up_sample = get_sample(0, &configuration, logger);
+    let down_sample = get_sample(1, &configuration, logger);
 
     if configuration.create_type == CreateType::FILE {
         up_command.push_str("-- ====  UP  ====\n");
@@ -761,11 +764,11 @@ fn get_file_content(t: usize, configuration: &Configuration) -> String {
 /// # Arguments
 ///
 /// * `configuration` - The migration configuration.
-fn debug_configuration(configuration: &Configuration) {
+fn debug_configuration(configuration: &Configuration, logger: &slog::Logger) {
     match configuration.engine {
-        EngineName::POSTGRESQL => debug!("Engine: PostgreSQL"),
-        EngineName::MYSQL => debug!("Engine: MySQL"),
-        EngineName::SQLITE => debug!("Engine: SQLite"),
+        EngineName::POSTGRESQL => slog::debug!(logger, "Engine: PostgreSQL"),
+        EngineName::MYSQL => slog::debug!(logger, "Engine: MySQL"),
+        EngineName::SQLITE => slog::debug!(logger, "Engine: SQLite"),
     };
 }
 
@@ -775,7 +778,8 @@ fn debug_configuration(configuration: &Configuration) {
 ///
 /// * `folder` - The folder to put migration into.
 /// * `configuration` - The migration configuration.
-fn process_create(folder: &str, configuration: &Configuration) {
+/// * `logger` - Logger instance.
+fn process_create(folder: &str, configuration: &Configuration, logger: &slog::Logger) {
     let t = get_current_time();
 
     // Now is YYYYMMDDhhmmss
@@ -786,11 +790,11 @@ fn process_create(folder: &str, configuration: &Configuration) {
             let filename = &[&now, "_", &configuration.create_name, ".sql"].join("");
             let full_filename = Path::new(folder).join(filename);
             if configuration.debug == true {
-                debug_configuration(configuration);
-                debug!("File to be created:");
-                debug!("{}", full_filename.display());
+                debug_configuration(configuration, logger);
+                slog::debug!(logger, "File to be created:");
+                slog::debug!(logger, "{}", full_filename.display());
             } else {
-                create_file(&full_filename, &get_file_content(0, &configuration));
+                create_file(&full_filename, &get_file_content(0, &configuration, logger), logger);
             }
         },
         CreateType::FOLDER => {
@@ -798,25 +802,25 @@ fn process_create(folder: &str, configuration: &Configuration) {
             let full_folder_str = match full_folder.clone().into_os_string().into_string() {
                 Ok(s) => s,
                 Err(e) => {
-                    crit!("Could not create migration folder: {}", e.into_string().unwrap());
+                    slog::crit!(logger, "Could not create migration folder: {}", e.into_string().unwrap());
                     return;
                 }
             };
 
-            if create_folder(&configuration, &full_folder_str) == true {
+            if create_folder(&configuration, &full_folder_str, logger) == true {
                 let full_filename_up = full_folder.join("up.sql");
                 let full_filename_down = full_folder.join("down.sql");
 
                 match configuration.debug {
                     true => {
-                        debug_configuration(configuration);
-                        debug!("Files to be created:");
-                        debug!("{}", full_filename_up.display());
-                        debug!("{}", full_filename_down.display());
+                        debug_configuration(configuration, logger);
+                        slog::debug!(logger, "Files to be created:");
+                        slog::debug!(logger, "{}", full_filename_up.display());
+                        slog::debug!(logger, "{}", full_filename_down.display());
                     },
                     false => {
-                        create_file(&full_filename_up, &get_file_content(1, &configuration));
-                        create_file(&full_filename_down, &get_file_content(2, &configuration));
+                        create_file(&full_filename_up, &get_file_content(1, &configuration, logger), logger);
+                        create_file(&full_filename_down, &get_file_content(2, &configuration, logger), logger);
                     }
                 };
             }
@@ -827,14 +831,14 @@ fn process_create(folder: &str, configuration: &Configuration) {
 
             match configuration.debug {
                 true => {
-                    debug_configuration(configuration);
-                    debug!("Files to be created:");
-                    debug!("{}", full_filename_up.display());
-                    debug!("{}", full_filename_down.display());
+                    debug_configuration(configuration, logger);
+                    slog::debug!(logger, "Files to be created:");
+                    slog::debug!(logger, "{}", full_filename_up.display());
+                    slog::debug!(logger, "{}", full_filename_down.display());
                 },
                 false => {
-                    create_file(&full_filename_up, &get_file_content(1, &configuration));
-                    create_file(&full_filename_down, &get_file_content(2, &configuration));
+                    create_file(&full_filename_up, &get_file_content(1, &configuration, logger), logger);
+                    create_file(&full_filename_down, &get_file_content(2, &configuration, logger), logger);
                 }
             };
         }
@@ -846,14 +850,15 @@ fn process_create(folder: &str, configuration: &Configuration) {
 /// # Arguments
 ///
 /// * `configuration` - The configuration to use.
-pub fn process(configuration: &Configuration) -> bool {
+/// * `logger` - Logger instance.
+pub fn process(configuration: &Configuration, logger: &slog::Logger) -> bool {
     let migration_folder = &configuration.path;
 
     if Path::new(&migration_folder).exists() == true {
-        process_create(&migration_folder, &configuration);
+        process_create(&migration_folder, &configuration, logger);
     } else if ask_for_new_folder(&configuration, &migration_folder) == true {
-        if create_folder(&configuration, &migration_folder) == true {
-            process_create(&migration_folder, &configuration);
+        if create_folder(&configuration, &migration_folder, logger) == true {
+            process_create(&migration_folder, &configuration, logger);
         }
     }
 

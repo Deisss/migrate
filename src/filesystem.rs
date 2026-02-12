@@ -105,7 +105,8 @@ fn extract_useful_information_from_file_name(original: PathBuf) -> Option<File> 
 ///
 /// * `root` - Root folder.
 /// * `filter` - Possible filter to send (will reject any file below given value - used by interactive mode).
-pub fn migrations(root: &str, filter: Option<String>) -> Vec<File> {
+/// * `logger` - Logger instance.
+pub fn migrations(root: &str, filter: Option<String>, logger: &slog::Logger) -> Vec<File> {
     if root.len() == 0 {
         return Vec::new();
     }
@@ -146,16 +147,16 @@ pub fn migrations(root: &str, filter: Option<String>) -> Vec<File> {
                             }
                         } else {
                             match filename {
-                                Ok(s) => warn!("Failed to get file: {}", s),
+                                Ok(s) => slog::warn!(logger, "Failed to get file: {}", s),
                                 _ => {}
                             }
                         }
                     }
-                    Err(e) => warn!("Could not access the file: {}", e)
+                    Err(e) => slog::warn!(logger, "Could not access the file: {}", e)
                 }
             }
         },
-        Err(e) => warn!("Error while reading migration folder: {}", e)
+        Err(e) => slog::warn!(logger, "Error while reading migration folder: {}", e)
     }
 
     vector

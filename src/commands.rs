@@ -15,32 +15,33 @@ use crate::filesystem::File;
 /// * `command` - The text for the files listing.
 /// * `nothing` - If there is nothing to do, this will be printed instead of command.
 /// * `files` - The files.
-pub fn debug_configuration(configuration: &Configuration, command: &str, nothing: &str, files: &Vec<File>) {
+/// * `logger` - Logger instance.
+pub fn debug_configuration(configuration: &Configuration, command: &str, nothing: &str, files: &Vec<File>, logger: &slog::Logger) {
     match configuration.engine {
-        EngineName::POSTGRESQL => debug!("Engine: PostgreSQL"),
-        EngineName::MYSQL => debug!("Engine: MySQL"),
-        EngineName::SQLITE => debug!("Engine: SQLite"),
+        EngineName::POSTGRESQL => slog::debug!(logger, "Engine: PostgreSQL"),
+        EngineName::MYSQL => slog::debug!(logger, "Engine: MySQL"),
+        EngineName::SQLITE => slog::debug!(logger, "Engine: SQLite"),
     };
     if configuration.url.len() > 0 {
-        debug!("url: {}", &configuration.url);
+        slog::debug!(logger, "url: {}", &configuration.url);
     } else {
-        debug!("host: {}", &configuration.host);
-        debug!("port: {}", &configuration.port);
-        debug!("database: {}", &configuration.database);
-        debug!("username: {}", &configuration.username);
-        debug!("password: {}", &configuration.password);
+        slog::debug!(logger, "host: {}", &configuration.host);
+        slog::debug!(logger, "port: {}", &configuration.port);
+        slog::debug!(logger, "database: {}", &configuration.database);
+        slog::debug!(logger, "username: {}", &configuration.username);
+        slog::debug!(logger, "password: {}", &configuration.password);
     }
-    debug!("table: {}", &configuration.table);
-    debug!("continue on error: {}", &configuration.continue_on_error);
+    slog::debug!(logger, "table: {}", &configuration.table);
+    slog::debug!(logger, "continue on error: {}", &configuration.continue_on_error);
 
     if files.len() == 0 {
         if nothing.len() > 0 {
-            debug!("{}", nothing);
+            slog::debug!(logger, "{}", nothing);
         }
     } else {
-        debug!("{}", command);
+        slog::debug!(logger, "{}", command);
         for file in files {
-            debug!("{}", file.origin.display());
+            slog::debug!(logger, "{}", file.origin.display());
         }
     }
 }

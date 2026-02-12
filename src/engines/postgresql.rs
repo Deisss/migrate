@@ -12,10 +12,10 @@ use postgres_native_tls::MakeTlsConnector;
 ///
 /// # Arguments
 ///
-/// * `file` - The SQL file having problem.
 /// * `content` - The SQL content having problem.
 /// * `error` - The error found.
-fn print_error_postgres(content: &str, error: postgres::error::Error) {
+/// * `logger` - Logger instance.
+fn print_error_postgres(content: &str, error: postgres::error::Error, logger: &slog::Logger) {
     let mut str_error = format!("{}", error);
 
     if str_error.starts_with("\"") && str_error.ends_with("\"") {
@@ -41,41 +41,41 @@ fn print_error_postgres(content: &str, error: postgres::error::Error) {
                                     let spaces_trimmed: usize = spaces as usize - (result.2.len() - trimmed.len());
 
                                     // Printing the error
-                                    crit!("");
-                                    crit!("{} line {} column {}:", downcast.severity(), result.1, spaces);
-                                    crit!("");
-                                    crit!("{}", trimmed);
+                                    slog::crit!(logger, "");
+                                    slog::crit!(logger, "{} line {} column {}:", downcast.severity(), result.1, spaces);
+                                    slog::crit!(logger, "");
+                                    slog::crit!(logger, "{}", trimmed);
                                     let debug = format!("{}^ {}: {}", std::iter::repeat(" ").take(spaces_trimmed).collect::<String>(),
                                                          downcast.code().code(),
                                                          downcast.message());
-                                    crit!("{}", debug);
-                                    crit!("");
+                                    slog::crit!(logger, "{}", debug);
+                                    slog::crit!(logger, "");
                                 },
                                 None => {
-                                    crit!("");
-                                    crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
-                                    crit!("");
+                                    slog::crit!(logger, "");
+                                    slog::crit!(logger, "SQL Error: {}: {}", downcast.code().code(), str_error);
+                                    slog::crit!(logger, "");
                                 }
                             };
                         },
                         Err(_e) => {
-                            crit!("");
-                            crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
-                            crit!("");
+                            slog::crit!(logger, "");
+                            slog::crit!(logger, "SQL Error: {}: {}", downcast.code().code(), str_error);
+                            slog::crit!(logger, "");
                         }
                     };
                 },
                 None => {
-                    crit!("");
-                    crit!("SQL Error: {}: {}", downcast.code().code(), str_error);
-                    crit!("");
+                    slog::crit!(logger, "");
+                    slog::crit!(logger, "SQL Error: {}: {}", downcast.code().code(), str_error);
+                    slog::crit!(logger, "");
                 }
             };
         },
         None => {
-            crit!("");
-            crit!("SQL Error: {}", str_error);
-            crit!("");
+            slog::crit!(logger, "");
+            slog::crit!(logger, "SQL Error: {}", str_error);
+            slog::crit!(logger, "");
         }
     };
 }
@@ -84,15 +84,16 @@ fn print_error_postgres(content: &str, error: postgres::error::Error) {
 pub struct Postgresql {
     client: Client,
     migration_table_name: String,
+    logger: slog::Logger,
 }
 
 impl Postgresql {
     /// Create PostgreSQL
-    pub fn new(url: &str, migration_table_name: &str) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
+    pub fn new(url: &str, migration_table_name: &str, logger: &slog::Logger) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
         let config = match Config::from_str(url) {
             Ok(c) => c,
             Err(e) => {
-                crit!("Could not create configuration for PostgreSQL: {}", e);
+                slog::crit!(logger, "Could not create configuration for PostgreSQL: {}", e);
                 return Err(Box::new(e));
             }
 
@@ -105,6 +106,7 @@ impl Postgresql {
                 Ok(Box::new(Postgresql {
                     client: connection,
                     migration_table_name: migration_table_name.to_owned(),
+                    logger: logger.clone(),
                 }))
             },
             Err(_e) => {
@@ -116,20 +118,21 @@ impl Postgresql {
                                 Ok(Box::new(Postgresql {
                                     client: connection,
                                     migration_table_name: migration_table_name.to_owned(),
+                                    logger: logger.clone(),
                                 }))
                             },
                             Err(e) => {
                                 if e.to_string().starts_with("error parsing response from server") {
-                                    crit!("Could not connect to PostgreSQL: check credentials");
+                                    slog::crit!(logger, "Could not connect to PostgreSQL: check credentials");
                                 } else {
-                                    crit!("Could not connect to PostgreSQL: {}", e);
+                                    slog::crit!(logger, "Could not connect to PostgreSQL: {}", e);
                                 }
                                 Err(Box::new(e))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("Could not get TLS for PostgreSQL: {}", e);
+                        slog::crit!(logger, "Could not get TLS for PostgreSQL: {}", e);
                         Err(Box::new(e))
                     }
                 }
@@ -152,7 +155,7 @@ impl SqlEngine for Postgresql {
         match self.client.query(&get_migration as &str, &[]) {
             Ok(results) => Ok(results.iter().map(|row| row.get(0)).collect::<Vec<String>>()),
             Err(e) => {
-                crit!("Error getting migration: {}", e);
+                slog::crit!(&self.logger, "Error getting migration: {}", e);
                 Err(Box::new(e))
             }
         }
@@ -164,7 +167,7 @@ impl SqlEngine for Postgresql {
         match self.client.query(&get_migration as &str, &[&migration_type]) {
             Ok(results) => Ok(results.iter().map(|row| (row.get(0), row.get(1), row.get(2))).collect::<Vec<(String, String, String)>>()),
             Err(e) => {
-                crit!("Error getting migration: {}", e);
+                slog::crit!(&self.logger, "Error getting migration: {}", e);
                 Err(Box::new(e))
             }
         }
@@ -184,13 +187,13 @@ impl SqlEngine for Postgresql {
                         match self.client.query(&insert as &str, &[&version, &hash, &migration_type, &file_name]) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e);
+                                slog::crit!(&self.logger, "Could store result in migration table: {}", e);
                                 Err(Box::new(e))
                             }
                         }
                     },
                     Err(e) => {
-                        print_error_postgres(migration, e);
+                        print_error_postgres(migration, e, &self.logger);
                         Err(Box::new(EngineError {}))
                     }
                 }
@@ -212,25 +215,25 @@ impl SqlEngine for Postgresql {
                                         match trx.commit() {
                                             Ok(_) => Ok(()),
                                             Err(e) => {
-                                                crit!("Failed to commit transaction: {}", e);
+                                                slog::crit!(&self.logger, "Failed to commit transaction: {}", e);
                                                 Err(Box::new(e))
                                             }
                                         }
                                     },
                                     Err(e) => {
-                                        crit!("Could store result in migration table: {}", e);
+                                        slog::crit!(&self.logger, "Could store result in migration table: {}", e);
                                         Err(Box::new(e))
                                     }
                                 }
                             },
                             Err(e) => {
-                                print_error_postgres(migration, e);
+                                print_error_postgres(migration, e, &self.logger);
                                 Err(Box::new(EngineError {}))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("Could not create a transaction: {}", e);
+                        slog::crit!(&self.logger, "Could not create a transaction: {}", e);
                         Err(Box::new(e))
                     }
                 }
@@ -249,13 +252,13 @@ impl SqlEngine for Postgresql {
                         match self.client.query(&del as &str, &[&version]) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                crit!("Could store result in migration table: {}", e);
+                                slog::crit!(&self.logger, "Could store result in migration table: {}", e);
                                 Err(Box::new(e))
                             }
                         }
                     },
                     Err(e) => {
-                        print_error_postgres(migration, e);
+                        print_error_postgres(migration, e, &self.logger);
                         Err(Box::new(EngineError {}))
                     }
                 }
@@ -273,25 +276,25 @@ impl SqlEngine for Postgresql {
                                         match trx.commit() {
                                             Ok(_) => Ok(()),
                                             Err(e) => {
-                                                crit!("Failed to commit transaction: {}", e);
+                                                slog::crit!(&self.logger, "Failed to commit transaction: {}", e);
                                                 Err(Box::new(e))
                                             }
                                         }
                                     },
                                     Err(e) => {
-                                        crit!("Could store result in migration table: {}", e);
+                                        slog::crit!(&self.logger, "Could store result in migration table: {}", e);
                                         Err(Box::new(e))
                                     }
                                 }
                             },
                             Err(e) => {
-                                print_error_postgres(migration, e);
+                                print_error_postgres(migration, e, &self.logger);
                                 Err(Box::new(EngineError {}))
                             }
                         }
                     },
                     Err(e) => {
-                        crit!("Could not create a transaction: {}", e);
+                        slog::crit!(&self.logger, "Could not create a transaction: {}", e);
                         Err(Box::new(e))
                     }
                 }

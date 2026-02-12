@@ -124,10 +124,11 @@ fn mysql_url(configuration: &Configuration) -> String {
 ///
 /// * `name` - The engine name (like mysql, postgres, ...).
 /// * `configuration` - The configuration to use.
-pub fn get_sql_engine(name: &EngineName, configuration: &Configuration) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
+/// * `logger` - Logger instance for the engine.
+pub fn get_sql_engine(name: &EngineName, configuration: &Configuration, logger: &slog::Logger) -> Result<Box<dyn SqlEngine>, Box<dyn Error>> {
     match name {
-        EngineName::SQLITE => sqlite::Sqlite::new(&sqlite_url(configuration), &configuration.table),
-        EngineName::POSTGRESQL => postgresql::Postgresql::new(&postgresql_url(configuration), &configuration.table),
-        EngineName::MYSQL => mysql::Mysql::new(&mysql_url(configuration), &configuration.table),
+        EngineName::SQLITE => sqlite::Sqlite::new(&sqlite_url(configuration), &configuration.table, logger),
+        EngineName::POSTGRESQL => postgresql::Postgresql::new(&postgresql_url(configuration), &configuration.table, logger),
+        EngineName::MYSQL => mysql::Mysql::new(&mysql_url(configuration), &configuration.table, logger),
     }
 }

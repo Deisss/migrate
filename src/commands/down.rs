@@ -14,18 +14,19 @@ use std::time::Instant;
 ///
 /// * `configuration` - The system configuration.
 /// * `files` - The files found.
-pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
-    let mut db = match get_sql_engine(&configuration.engine, configuration) {
+/// * `logger` - Logger instance.
+pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>, logger: &slog::Logger) -> Result<(), Box<dyn Error>> {
+    let mut db = match get_sql_engine(&configuration.engine, configuration, logger) {
         Ok(db) => db,
         Err(e) => {
-            crit!("Error getting engine: {:?}", e);
+            slog::crit!(logger, "Error getting engine: {:?}", e);
             return Err(Box::new(EngineError {}));
         }
     };
 
     match db.create_migration_table() {
         Err(e) => {
-            crit!("Error creating migration table: {:?}", e);
+            slog::crit!(logger, "Error creating migration table: {:?}", e);
             return Err(Box::new(EngineError {}));
         },
         _ => {}
@@ -39,7 +40,7 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
             e
         },
         Err(e) => {
-            crit!("Error getting migrations: {:?}", e);
+            slog::crit!(logger, "Error getting migrations: {:?}", e);
             return Err(Box::new(EngineError {}));
         }
     };
@@ -49,7 +50,7 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
 
     // We debug and exit
     if configuration.debug == true {
-        debug_configuration(&configuration, "Files to be reverted:", "Nothing to revert", &files);
+        debug_configuration(&configuration, "Files to be reverted:", "Nothing to revert", &files, logger);
         return Ok(());
     }
 
@@ -57,7 +58,7 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
     for file in files {
         let now = Instant::now();
         let file_name = get_file_path_without_migration_path(&configuration.path, &file.origin.display().to_string());
-        info!("{} -> reverting", &file_name);
+        slog::info!(logger, "{} -> reverting", &file_name);
 
         let error: bool = match get_sql(&file, 0) {
             Ok(sql) => {
@@ -67,7 +68,7 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
                 }
             },
             Err(e) => {
-                warn!("{} failed to read: {}", &file_name, e);
+                slog::warn!(logger, "{} failed to read: {}", &file_name, e);
                 true
             }
         };
@@ -75,13 +76,13 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
         let elapsed = now.elapsed().as_millis();
         if error {
             let debug = format!("{} -> error after {}", &file_name, &readable_time(elapsed));
-            crit!("{}", debug);
+            slog::crit!(logger, "{}", debug);
         } else {
             let debug = format!("{} -> migrated in {}", &file_name, &readable_time(elapsed));
-            info!("{}", debug);
+            slog::info!(logger, "{}", debug);
         }
 
-        debug!("");
+        slog::debug!(logger, "");
 
         // If the continue on error is set to false, we have to exit there.
         if error && configuration.continue_on_error == false {
@@ -97,11 +98,12 @@ pub fn process_down_sql(configuration: &Configuration, files: &mut Vec<File>) ->
 /// # Arguments
 ///
 /// * `configuration` - The configuration to use
-pub fn process(configuration: &Configuration) -> bool {
-    let mut files = migrations(&configuration.path, None);
+/// * `logger` - Logger instance
+pub fn process(configuration: &Configuration, logger: &slog::Logger) -> bool {
+    let mut files = migrations(&configuration.path, None, logger);
 
     if files.len() == 0 {
-        info!("Nothing to revert");
+        slog::info!(logger, "Nothing to revert");
         return true;
     }
 
@@ -118,12 +120,12 @@ pub fn process(configuration: &Configuration) -> bool {
 
     match files.len() {
         0 => {
-            info!("Nothing to revert");
+            slog::info!(logger, "Nothing to revert");
             true
         },
         _ => match configuration.engine {
             EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
-                match process_down_sql(configuration, &mut files) {
+                match process_down_sql(configuration, &mut files, logger) {
                     Err(_e) => false,
                     _ => true
                 }

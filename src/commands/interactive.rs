@@ -95,9 +95,10 @@ fn convert_file_to_interactive(file: &File) -> InteractiveMigration {
 ///
 /// # Arguments
 ///
-/// * `configuration` - The system configuration.
+/// * `migrations` - The migrations from the database.
 /// * `files` - The files.
-pub fn merge_migrations_and_files(migrations: &Vec<(String, String, String)>, files: &Vec<File>) -> Vec<InteractiveMigration> {
+/// * `logger` - Logger instance.
+pub fn merge_migrations_and_files(migrations: &Vec<(String, String, String)>, files: &Vec<File>, logger: &slog::Logger) -> Vec<InteractiveMigration> {
     let mut results: Vec<InteractiveMigration> = Vec::with_capacity(migrations.len());
     for migration in migrations {
         results.push(convert_migration_to_interactive(&migration.0, &migration.1, &migration.2));
@@ -135,7 +136,7 @@ pub fn merge_migrations_and_files(migrations: &Vec<(String, String, String)>, fi
                             migration.file_up_hash = Some(hash);
                         },
                         Err(e) => {
-                            warn!("{} failed to read: {}", c.origin.display(), e);
+                            slog::warn!(logger, "{} failed to read: {}", c.origin.display(), e);
                             migration.file_up = Some(c);
                         }
                     }
@@ -157,7 +158,8 @@ pub fn merge_migrations_and_files(migrations: &Vec<(String, String, String)>, fi
 /// * `root` - The folder where migrations are.
 /// * `migrations` - The elements to show.
 /// * `selected` - The selected position.
-fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, selected: usize) -> std::io::Result<Vec<usize>> {
+/// * `logger` - Logger instance.
+fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, selected: usize, logger: &slog::Logger) -> std::io::Result<Vec<usize>> {
     let installed = Style::new().green();
     let not_installed = Style::new().red();
     let cyan = Style::new().cyan();
@@ -168,15 +170,15 @@ fn print_menu(term: &Term, root: &str, migrations: &Vec<InteractiveMigration>, s
     // need to specify number of lines here
     let r = term.write_line("");
     if r.is_err() {
-        crit!("Terminal error: {:?}", r.err());
+        slog::crit!(logger, "Terminal error: {:?}", r.err());
     }
     let r = term.write_line("   Installed |   To Do   | migration number | name");
     if r.is_err() {
-        crit!("Terminal error: {:?}", r.err());
+        slog::crit!(logger, "Terminal error: {:?}", r.err());
     }
     let r = term.write_line("  -----------+-----------+------------------+-----------------");
     if r.is_err() {
-        crit!("Terminal error: {:?}", r.err());
+        slog::crit!(logger, "Terminal error: {:?}", r.err());
     }
     results.push(0);
     results.push(50);
@@ -308,15 +310,16 @@ fn clear_menu(term: &Term, sizes: &mut Vec<usize>) -> std::io::Result<()> {
 ///
 /// * `root` - The root of migration folder.
 /// * `migrations` - The files to show.
-fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>) -> bool {
+/// * `logger` - Logger instance.
+fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>, logger: &slog::Logger) -> bool {
     let term = Term::stdout();
     let mut position: usize = 0;
     let mut rerender = false;
 
 
-    let r = print_menu(&term, root, &migrations, position);
+    let r = print_menu(&term, root, &migrations, position, logger);
     if r.is_err() {
-        crit!("Terminal error: {:?}", r.as_ref().err());
+        slog::crit!(logger, "Terminal error: {:?}", r.as_ref().err());
     }
     let mut rendered_sizes: Vec<usize> = r.unwrap();
 
@@ -325,11 +328,11 @@ fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>)
             rerender = false;
             let r = clear_menu(&term, &mut rendered_sizes);
             if r.is_err() {
-                crit!("Terminal error: {:?}", r.err());
+                slog::crit!(logger, "Terminal error: {:?}", r.err());
             }
-            let r = print_menu(&term, root, &migrations, position);
+            let r = print_menu(&term, root, &migrations, position, logger);
             if r.is_err() {
-                crit!("Terminal error: {:?}", r.as_ref().err());
+                slog::crit!(logger, "Terminal error: {:?}", r.as_ref().err());
             }
             rendered_sizes = r.unwrap();
         }
@@ -361,14 +364,14 @@ fn show_interactive_menu(root: &str, migrations: &mut Vec<InteractiveMigration>)
                     // Return true when we want to exit with apply
                     let r = clear_menu(&term, &mut rendered_sizes);
                     if r.is_err() {
-                        crit!("Terminal error: {:?}", r.err());
+                        slog::crit!(logger, "Terminal error: {:?}", r.err());
                     }
                     return true;
                 } else if position == migrations.len() + 1 {
                     // Return false when we want to just quit
                     let r = clear_menu(&term, &mut rendered_sizes);
                     if r.is_err() {
-                        crit!("Terminal error: {:?}", r.err());
+                        slog::crit!(logger, "Terminal error: {:?}", r.err());
                     }
                     return false;
                 }
@@ -445,23 +448,24 @@ fn show_recap_menu(root: &str, migrations: &Vec<InteractiveMigration>) -> bool {
 ///
 /// * `configuration` - The system configuration.
 /// * `files` - The files.
-fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
-    let db = get_sql_engine(&configuration.engine, configuration);
+/// * `logger` - Logger instance.
+fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>, logger: &slog::Logger) -> Result<(), Box<dyn Error>> {
+    let db = get_sql_engine(&configuration.engine, configuration, logger);
     if db.is_err() {
-        crit!("Error getting engine: {:?}", db.as_ref().err());
+        slog::crit!(logger, "Error getting engine: {:?}", db.as_ref().err());
     }
     let mut db = db.unwrap();
 
     match db.create_migration_table() {
         Err(e) => {
-            crit!("Error creating migration table: {:?}", e);
+            slog::crit!(logger, "Error creating migration table: {:?}", e);
         },
         _ => {}
     };
 
     let existing = db.get_migrations_with_hashes(&configuration.migration_type);
     if existing.is_err() {
-        crit!("Error getting migrations: {:?}", existing.as_ref().err());
+        slog::crit!(logger, "Error getting migrations: {:?}", existing.as_ref().err());
     }
     let mut existing = existing.unwrap();
 
@@ -471,8 +475,8 @@ fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>)
         files.retain(|file| limit_per_date(&file.number.to_string(), configuration.interactive_days));
     }
 
-    let mut to_show = merge_migrations_and_files(&existing, files);
-    let we_have_to_migrate = show_interactive_menu(&configuration.path, &mut to_show);
+    let mut to_show = merge_migrations_and_files(&existing, files, logger);
+    let we_have_to_migrate = show_interactive_menu(&configuration.path, &mut to_show, logger);
 
     let mut we_have_migrations_to_do = false;
     for migration in to_show.iter() {
@@ -498,14 +502,14 @@ fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>)
             migration_down.sort_by(|f1, f2| f2.partial_cmp(f1).unwrap());
 
             if migration_down.len() > 0 {
-                debug!("REVERTING");
-                debug!("");
-                process_down_sql(configuration, &mut migration_down)?;
+                slog::debug!(logger, "REVERTING");
+                slog::debug!(logger, "");
+                process_down_sql(configuration, &mut migration_down, logger)?;
             }
             if migration_up.len() > 0 {
-                debug!("MIGRATING");
-                debug!("");
-                process_up_sql(configuration, &mut migration_up)?;
+                slog::debug!(logger, "MIGRATING");
+                slog::debug!(logger, "");
+                process_up_sql(configuration, &mut migration_up, logger)?;
             }
         }
     }
@@ -518,19 +522,20 @@ fn process_interactive_sql(configuration: &Configuration, files: &mut Vec<File>)
 /// # Arguments
 ///
 /// * `configuration` - The configuration to use.
-pub fn process(configuration: &Configuration) -> bool {
+/// * `logger` - Logger instance.
+pub fn process(configuration: &Configuration, logger: &slog::Logger) -> bool {
     // We have to exit right here
     if configuration.debug == true {
-        debug_configuration(configuration, "", "", &Vec::new());
+        debug_configuration(configuration, "", "", &Vec::new(), logger);
         return true;
     }
 
-    let mut files = filesystem::migrations(&configuration.path, None);
+    let mut files = filesystem::migrations(&configuration.path, None, logger);
     files.sort_by(|f1, f2| f1.partial_cmp(f2).unwrap());
 
     match configuration.engine {
         EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
-            match process_interactive_sql(configuration, &mut files) {
+            match process_interactive_sql(configuration, &mut files, logger) {
                 Err(_e) => false,
                 _ => true
             }

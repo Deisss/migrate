@@ -13,23 +13,24 @@ use std::time::Instant;
 ///
 /// * `configuration` - The system configuration.
 /// * `files` - The files found.
-pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> Result<(), Box<dyn Error>> {
-    let db = get_sql_engine(&configuration.engine, configuration);
+/// * `logger` - Logger instance.
+pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>, logger: &slog::Logger) -> Result<(), Box<dyn Error>> {
+    let db = get_sql_engine(&configuration.engine, configuration, logger);
     if db.is_err() {
-        crit!("Error getting engine: {:?}", db.as_ref().err());
+        slog::crit!(logger, "Error getting engine: {:?}", db.as_ref().err());
     }
     let mut db = db.unwrap();
 
     match db.create_migration_table() {
         Err(e) => {
-            crit!("Error creating migration table: {:?}", e);
+            slog::crit!(logger, "Error creating migration table: {:?}", e);
         },
         _ => {}
     };
 
     let existing = db.get_migrations();
     if existing.is_err() {
-        crit!("Error getting migrations: {:?}", existing.as_ref().err());
+        slog::crit!(logger, "Error getting migrations: {:?}", existing.as_ref().err());
     }
     let existing = existing.unwrap();
 
@@ -42,7 +43,7 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
 
     // We debug and exit
     if configuration.debug == true {
-        debug_configuration(&configuration, "Files to be migrated:", "Nothing to migrate", &files);
+        debug_configuration(&configuration, "Files to be migrated:", "Nothing to migrate", &files, logger);
         return Ok(());
     }
 
@@ -50,7 +51,7 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
     for file in files {
         let now = Instant::now();
         let file_name = get_file_path_without_migration_path(&configuration.path, &file.origin.display().to_string());
-        info!("{} -> migrating", &file_name);
+        slog::info!(logger, "{} -> migrating", &file_name);
         let error: bool = match get_sql(&file, 1) {
             Ok(sql) => {
                 match db.migrate(&file.origin, &file.number.to_string(), &configuration.migration_type, &sql, skip_transaction(&configuration, &sql)) {
@@ -59,7 +60,7 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
                 }
             },
             Err(e) => {
-                warn!("{} failed to read: {}", &file_name, e);
+                slog::warn!(logger, "{} failed to read: {}", &file_name, e);
                 true
             }
         };
@@ -67,13 +68,13 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
         let elapsed = now.elapsed().as_millis();
         if error {
             let debug = format!("{} -> error after {}", &file_name, &readable_time(elapsed));
-            crit!("{}", debug);
+            slog::crit!(logger, "{}", debug);
         } else {
             let debug = format!("{} -> migrated in {}", &file_name, &readable_time(elapsed));
-            info!("{}", debug);
+            slog::info!(logger, "{}", debug);
         }
 
-        debug!("");
+        slog::debug!(logger, "");
 
         // If the continue on error is set to false, we have to exit there.
         if error && configuration.continue_on_error == false {
@@ -89,11 +90,12 @@ pub fn process_up_sql(configuration: &Configuration, files: &mut Vec<File>) -> R
 /// # Arguments
 ///
 /// * `configuration` - The configuration to use
-pub fn process(configuration: &Configuration) -> bool {
-    let mut files = migrations(&configuration.path, None);
+/// * `logger` - Logger instance
+pub fn process(configuration: &Configuration, logger: &slog::Logger) -> bool {
+    let mut files = migrations(&configuration.path, None, logger);
 
     if files.len() == 0 {
-        info!("Nothing to migrate");
+        slog::info!(logger, "Nothing to migrate");
         return true;
     }
 
@@ -109,12 +111,12 @@ pub fn process(configuration: &Configuration) -> bool {
 
     match files.len() {
         0 => {
-            info!("Nothing to migrate");
+            slog::info!(logger, "Nothing to migrate");
             true
         },
         _ => match configuration.engine {
             EngineName::POSTGRESQL | EngineName::SQLITE | EngineName::MYSQL => {
-                match process_up_sql(configuration, &mut files) {
+                match process_up_sql(configuration, &mut files, logger) {
                     Err(_e) => false,
                     _ => true
                 }
